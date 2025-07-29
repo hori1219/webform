@@ -18,7 +18,7 @@
 
 ```
 webform/
-├── src/
+├── public/
 │   └── index.html          # メインのWebフォーム
 ├── scripts/
 │   └── gas-shipping-form.js # Google Apps Script コード
@@ -30,7 +30,7 @@ webform/
 
 ### 1. Webフォームの準備
 
-1. `src/index.html` をWebサーバーにアップロード、またはローカルで開く
+1. `public/index.html` をWebサーバーにアップロード、またはローカルで開く
 2. ファイルをブラウザで開いて動作確認
 
 ### 2. Google Sheets + Apps Script の設定
@@ -59,7 +59,7 @@ webform/
 4. 「**デプロイ**」をクリックして **ウェブアプリURL** を取得
 
 #### Step 4: フォームとの連携
-1. `src/index.html` を開く
+1. `public/index.html` を開く
 2. 以下の行を修正：
    ```javascript
    const GOOGLE_SCRIPT_URL = 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE';
@@ -106,7 +106,7 @@ webform/
 ## ⚙️ カスタマイズ
 
 ### フォーム項目の追加・変更
-1. `src/index.html` のフォーム部分を編集
+1. `public/index.html` のフォーム部分を編集
 2. `scripts/gas-shipping-form.js` のデータ処理部分も対応修正
 
 ### デザインの変更
