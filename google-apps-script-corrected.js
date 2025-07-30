@@ -181,92 +181,57 @@ function generateManagementNumber(sheet) {
   }
 }
 
-// 依頼書PDF生成機能
+// 依頼書PDF生成機能（Spreadsheet方式）
 function generateRequestPDF(data, managementNumber) {
   try {
-    // テンプレートドキュメントID（作成後に設定）
-    const templateDocId = 'YOUR_TEMPLATE_DOC_ID'; // 後で実際のIDに変更
+    // 現在のスプレッドシートを取得
+    const spreadsheetId = '1xfFlHJihYyhJ-CKP3Aj5veN9c9lanolsTj4kyvR_9R0';
+    const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+    
+    // テンプレートシートを取得（事前に作成が必要）
+    let templateSheet;
+    try {
+      templateSheet = spreadsheet.getSheetByName('依頼書テンプレート');
+    } catch (e) {
+      // テンプレートシートが存在しない場合は作成
+      templateSheet = createTemplateSheet(spreadsheet);
+    }
+    
+    // データをテンプレートに転記
+    fillTemplateData(templateSheet, data, managementNumber);
     
     // 保存先フォルダID
     const folderId = '1RJpSMtCHBUKqRL4kTisqEVs5YFLzlsk-';
-    
-    // テンプレートを複製
-    const templateDoc = DriveApp.getFileById(templateDocId);
     const folder = DriveApp.getFolderById(folderId);
     const fileName = `依頼書_${managementNumber}_${data.companyName}`;
-    const copiedDoc = templateDoc.makeCopy(fileName, folder);
     
-    // 複製した文書を開く
-    const doc = DocumentApp.openById(copiedDoc.getId());
-    const body = doc.getBody();
+    // PDF生成のための印刷設定
+    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?` +
+                `format=pdf&gid=${templateSheet.getSheetId()}` +
+                `&range=A1:I40` +
+                `&size=A4` +
+                `&portrait=true` +
+                `&fitw=true` +
+                `&top_margin=0.5` +
+                `&bottom_margin=0.5` +
+                `&left_margin=0.5` +
+                `&right_margin=0.5`;
     
-    // プレースホルダーを実際の値に置換
-    const replacements = {
-      '{{受付番号}}': managementNumber,
-      '{{依頼日}}': data.timestamp || new Date().toLocaleString('ja-JP'),
-      '{{会社名}}': data.companyName || '',
-      '{{担当者名}}': data.contactPerson || '',
-      '{{電話番号}}': data.phoneNumber || '',
-      '{{FAX番号}}': '', // 固定値または空
-      '{{メールアドレス}}': data.emailAddress || '',
-      '{{宛名}}': data.addressee || '',
-      '{{敬称}}': data.honorific || '',
-      '{{工事名}}': data.constructionName || '',
-      '{{工事住所}}': data.constructionAddress || '',
-      '{{作成日}}': data.creationDate || '',
-      '{{送信先会社名}}': data.destCompanyName || '',
-      '{{送信先担当者名}}': data.destContactPerson || '',
-      '{{送信先電話番号}}': data.destPhoneNumber || '',
-      '{{送信先メールアドレス}}': data.destEmailAddress || '',
-      '{{備考}}': data.remarks || ''
-    };
-    
-    // 基本的な置換を実行
-    Object.keys(replacements).forEach(placeholder => {
-      body.replaceText(placeholder, replacements[placeholder]);
+    // PDF生成
+    const response = UrlFetchApp.fetch(url, {
+      headers: {
+        'Authorization': 'Bearer ' + ScriptApp.getOAuthToken()
+      }
     });
     
-    // 業者情報の置換（最大4社）
-    for (let i = 1; i <= 4; i++) {
-      const contractor = data.contractors && data.contractors[i-1];
-      body.replaceText(`{{業者分類${i}}}`, contractor ? contractor.type : '');
-      body.replaceText(`{{業者名${i}}}`, contractor ? contractor.name : '');
-    }
-    
-    // 必要書類のチェックマークを設定
-    const docChecks = {
-      '{{成分表試験成績書}}': data.documents && data.documents.includes('成分表・試験成績書') ? '✓' : '',
-      '{{SDS}}': data.documents && data.documents.includes('ＳＤＳ') ? '✓' : '',
-      '{{検査表}}': data.documents && data.documents.includes('検査表(ロットが必要です)') ? '✓' : '',
-      '{{カタログ}}': data.documents && data.documents.includes('カタログ') ? '✓' : '',
-      '{{ホルムアルデヒド証明書}}': data.documents && data.documents.includes('ﾎﾙﾑｱﾙﾃﾞﾋﾄﾞ(F☆☆☆☆)証明書') ? '✓' : ''
-    };
-    
-    Object.keys(docChecks).forEach(placeholder => {
-      body.replaceText(placeholder, docChecks[placeholder]);
-    });
-    
-    // 商品テーブルの生成（簡単な文字列として挿入）
-    let productTable = '';
-    if (data.products && data.products.length > 0) {
-      data.products.forEach(product => {
-        productTable += `${product.shipmentDate || ''} | ${product.productName || ''} | ${product.quantity || ''} | ${product.lotNumber || ''}\n`;
-      });
-    }
-    body.replaceText('{{商品テーブル}}', productTable);
-    
-    // 文書を保存
-    doc.saveAndClose();
-    
-    // PDFとして出力
-    const pdfBlob = DriveApp.getFileById(copiedDoc.getId()).getAs('application/pdf');
+    const pdfBlob = response.getBlob();
     pdfBlob.setName(`${fileName}.pdf`);
     
     // PDFをフォルダに保存
     const pdfFile = folder.createFile(pdfBlob);
     
-    // 元のGoogle Doc文書は削除（PDFのみ保持）
-    DriveApp.getFileById(copiedDoc.getId()).setTrashed(true);
+    // テンプレートシートのデータをクリア
+    clearTemplateData(templateSheet);
     
     return {
       pdfBlob: pdfBlob,
@@ -331,6 +296,172 @@ Email: ${data.emailAddress}
     console.error('メール送信エラー:', error);
     throw error;
   }
+}
+
+// テンプレートシート作成関数
+function createTemplateSheet(spreadsheet) {
+  const templateSheet = spreadsheet.insertSheet('依頼書テンプレート');
+  
+  // シート設定
+  templateSheet.setColumnWidths(1, 9, 100); // A-I列の幅を100pxに設定
+  templateSheet.setRowHeights(1, 40, 25);   // 行高を25pxに設定
+  
+  // タイトル設定
+  templateSheet.getRange('A1:I1').merge();
+  templateSheet.getRange('A1').setValue('出荷証明書作成依頼書');
+  templateSheet.getRange('A1').setFontSize(16).setFontWeight('bold').setHorizontalAlignment('center');
+  
+  // セクション見出しと枠組みを設定
+  setupTemplateLayout(templateSheet);
+  
+  return templateSheet;
+}
+
+// テンプレートレイアウト設定
+function setupTemplateLayout(sheet) {
+  // 受付番号・依頼日（3行目）
+  sheet.getRange('A3').setValue('受付番号：');
+  sheet.getRange('G3').setValue('ご依頼日：');
+  
+  // 発信元セクション（5-8行目）
+  sheet.getRange('A5').setValue('【発信元】').setFontWeight('bold');
+  sheet.getRange('A6').setValue('御社名：');
+  sheet.getRange('A7').setValue('ご担当者名：');
+  sheet.getRange('D7').setValue('様');
+  sheet.getRange('F7').setValue('FAX番号：');
+  sheet.getRange('A8').setValue('お電話番号：');
+  sheet.getRange('F8').setValue('メールアドレス：');
+  
+  // 基本情報セクション（10-12行目）
+  sheet.getRange('A10').setValue('宛名：');
+  sheet.getRange('A11').setValue('工事名：');
+  sheet.getRange('A12').setValue('工事住所：');
+  sheet.getRange('H12').setValue('作成日：');
+  
+  // 商品テーブルヘッダー（19行目）
+  sheet.getRange('A19').setValue('出荷年月日').setFontWeight('bold');
+  sheet.getRange('C19').setValue('商品名').setFontWeight('bold');
+  sheet.getRange('F19').setValue('数量').setFontWeight('bold');
+  sheet.getRange('G19').setValue('ロットNo').setFontWeight('bold');
+  
+  // 必要書類セクション（28-33行目）
+  sheet.getRange('A28').setValue('【必要書類】必要書類にチェックを入れてください').setFontWeight('bold');
+  sheet.getRange('A29').setValue('□ 成分表・試験成績書');
+  sheet.getRange('A30').setValue('□ ＳＤＳ');
+  sheet.getRange('A31').setValue('□ 検査表(ロットが必要です)');
+  sheet.getRange('A32').setValue('□ カタログ');
+  sheet.getRange('A33').setValue('□ ﾎﾙﾑｱﾙﾃﾞﾋﾄﾞ(F☆☆☆☆)証明書');
+  
+  // 送信先セクション（28-32行目、右側）
+  sheet.getRange('F28').setValue('【送信先】').setFontWeight('bold');
+  sheet.getRange('F29').setValue('会社名：');
+  sheet.getRange('F30').setValue('ご担当者名：');
+  sheet.getRange('I30').setValue('様');
+  sheet.getRange('F31').setValue('お電話番号：');
+  sheet.getRange('F32').setValue('メールアドレス：');
+  
+  // 備考欄（35-37行目）
+  sheet.getRange('A35').setValue('【備考欄】').setFontWeight('bold');
+  sheet.getRange('A36:I37').merge();
+  
+  // 罫線設定
+  const range = sheet.getRange('A1:I40');
+  range.setBorder(true, true, true, true, true, true);
+}
+
+// データ転記関数
+function fillTemplateData(sheet, data, managementNumber) {
+  // 基本情報
+  sheet.getRange('B3').setValue(managementNumber);
+  sheet.getRange('H3').setValue(data.timestamp || new Date().toLocaleString('ja-JP'));
+  
+  // 発信元情報
+  sheet.getRange('B6:D6').merge().setValue(data.companyName || '');
+  sheet.getRange('B7:C7').merge().setValue(data.contactPerson || '');
+  sheet.getRange('B8:D8').merge().setValue(data.phoneNumber || '');
+  sheet.getRange('G8:I8').merge().setValue(data.emailAddress || '');
+  
+  // 基本情報
+  sheet.getRange('B10:C10').merge().setValue(data.addressee || '');
+  sheet.getRange('D10').setValue(data.honorific || '');
+  sheet.getRange('B11:G11').merge().setValue(data.constructionName || '');
+  sheet.getRange('B12:G12').merge().setValue(data.constructionAddress || '');
+  sheet.getRange('I12').setValue(data.creationDate || '');
+  
+  // 業者情報
+  if (data.contractors && data.contractors.length > 0) {
+    for (let i = 0; i < Math.min(data.contractors.length, 4); i++) {
+      const row = 14 + i;
+      sheet.getRange(`A${row}:B${row}`).merge().setValue(data.contractors[i].type || '');
+      sheet.getRange(`C${row}:F${row}`).merge().setValue(data.contractors[i].name || '');
+    }
+  }
+  
+  // 商品情報
+  if (data.products && data.products.length > 0) {
+    for (let i = 0; i < Math.min(data.products.length, 7); i++) {
+      const row = 20 + i;
+      sheet.getRange(`A${row}:B${row}`).merge().setValue(data.products[i].shipmentDate || '');
+      sheet.getRange(`C${row}:E${row}`).merge().setValue(data.products[i].productName || '');
+      sheet.getRange(`F${row}`).setValue(data.products[i].quantity || '');
+      sheet.getRange(`G${row}:I${row}`).merge().setValue(data.products[i].lotNumber || '');
+    }
+  }
+  
+  // 必要書類のチェックマーク
+  const docChecks = {
+    'A29': data.documents && data.documents.includes('成分表・試験成績書'),
+    'A30': data.documents && data.documents.includes('ＳＤＳ'),
+    'A31': data.documents && data.documents.includes('検査表(ロットが必要です)'),
+    'A32': data.documents && data.documents.includes('カタログ'),
+    'A33': data.documents && data.documents.includes('ﾎﾙﾑｱﾙﾃﾞﾋﾄﾞ(F☆☆☆☆)証明書')
+  };
+  
+  Object.keys(docChecks).forEach(cell => {
+    const currentValue = sheet.getRange(cell).getValue();
+    const newValue = docChecks[cell] ? currentValue.replace('□', '☑') : currentValue;
+    sheet.getRange(cell).setValue(newValue);
+  });
+  
+  // 送信先情報
+  sheet.getRange('G29:I29').merge().setValue(data.destCompanyName || '');
+  sheet.getRange('G30:H30').merge().setValue(data.destContactPerson || '');
+  sheet.getRange('G31:I31').merge().setValue(data.destPhoneNumber || '');
+  sheet.getRange('G32:I32').merge().setValue(data.destEmailAddress || '');
+  
+  // 備考
+  sheet.getRange('A36:I37').setValue(data.remarks || '');
+}
+
+// テンプレートデータクリア関数
+function clearTemplateData(sheet) {
+  // データ部分のみクリア（レイアウトは保持）
+  const clearRanges = [
+    'B3', 'H3', // 受付番号、依頼日
+    'B6:D6', 'B7:C7', 'B8:D8', 'G8:I8', // 発信元
+    'B10:C10', 'D10', 'B11:G11', 'B12:G12', 'I12', // 基本情報
+    'A14:F17', // 業者情報
+    'A20:I26', // 商品情報
+    'G29:I32', // 送信先
+    'A36:I37'  // 備考
+  ];
+  
+  clearRanges.forEach(range => {
+    sheet.getRange(range).clearContent();
+  });
+  
+  // 必要書類のチェックマークをリセット
+  const docCells = ['A29', 'A30', 'A31', 'A32', 'A33'];
+  docCells.forEach((cell, index) => {
+    const labels = [
+      '□ 成分表・試験成績書',
+      '□ ＳＤＳ', 
+      '□ 検査表(ロットが必要です)',
+      '□ カタログ',
+      '□ ﾎﾙﾑｱﾙﾃﾞﾋﾄﾞ(F☆☆☆☆)証明書'
+    ];
+    sheet.getRange(cell).setValue(labels[index]);
+  });
 }
 
 function doGet(e) {
