@@ -4,7 +4,7 @@ function doPost(e) {
     const data = JSON.parse(e.postData.contents);
     
     // スプレッドシートにアクセス
-    const spreadsheetId = '1Ern5sRPYnwaxJB7xfQUQWsQi6I4ZHjsE9qDrHx6cLko'; // 実際のスプレッドシートIDに変更
+    const spreadsheetId = '1xfFlHJihYyhJ-CKP3Aj5veN9c9lanolsTj4kyvR_9R0'; // 実際のスプレッドシートID
     const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
     const sheet = spreadsheet.getActiveSheet();
     
