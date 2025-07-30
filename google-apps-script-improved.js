@@ -181,7 +181,7 @@ function generateManagementNumber(sheet) {
   }
 }
 
-// 依頼書PDF生成機能（Google Docs方式）
+// 依頼書PDF生成機能（Google Docs方式・改良版）
 function generateRequestPDF(data, managementNumber) {
   try {
     console.log('PDF生成開始...');
@@ -318,7 +318,7 @@ function getOrCreateDocumentTemplate() {
   }
 }
 
-// Google Docsテンプレート作成関数（超コンパクト版）
+// Google Docsテンプレート作成関数（改良版：テーブル不使用）
 function createDocumentTemplate() {
   try {
     // 新しい文書を作成
@@ -326,10 +326,10 @@ function createDocumentTemplate() {
     const body = doc.getBody();
     
     // ページ設定（極限まで圧縮）
-    body.setMarginTop(10);
-    body.setMarginBottom(10);
-    body.setMarginLeft(15);
-    body.setMarginRight(15);
+    body.setMarginTop(8);
+    body.setMarginBottom(8);
+    body.setMarginLeft(12);
+    body.setMarginRight(12);
     
     // 文書全体をクリア
     body.clear();
@@ -338,35 +338,96 @@ function createDocumentTemplate() {
     const title = body.appendParagraph('出荷証明書作成依頼書');
     title.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
     title.editAsText().setFontSize(14).setBold(true);
-    title.setSpacingAfter(2);
+    title.setSpacingAfter(1);
     title.setSpacingBefore(0);
     
-    // === 全情報を1つの超コンパクトテーブルに統合 ===
-    const allTable = body.appendTable([
-      // ヘッダー行
-      ['受付番号：{{受付番号}}', '依頼日：{{依頼日}}', '', ''],
-      
-      // 発信元・宛先を1行に圧縮
-      ['【発信元】{{会社名}} {{担当者名}}様', 'TEL：{{電話番号}}', '【宛先】{{宛名}} {{敬称}}', '作成日：{{作成日}}'],
-      ['Email：{{メールアドレス}}', '工事名：{{工事名}}', '工事住所：{{工事住所}}', ''],
-      
-      // 業者情報を2行に圧縮
-      ['{{業者分類1}}：{{業者名1}}', '{{業者分類2}}：{{業者名2}}', '{{業者分類3}}：{{業者名3}}', '{{業者分類4}}：{{業者名4}}'],
-      
-      // 商品ヘッダー
+    // === 受付番号・依頼日 ===
+    const headerInfo = body.appendParagraph('受付番号：{{受付番号}}　　　　　　　　　　　　　　ご依頼日：{{依頼日}}');
+    headerInfo.editAsText().setFontSize(10);
+    headerInfo.setSpacingAfter(1);
+    headerInfo.setSpacingBefore(0);
+    
+    // === 発信元 ===
+    const senderSection = body.appendParagraph('【発信元】');
+    senderSection.editAsText().setFontSize(10).setBold(true);
+    senderSection.setSpacingAfter(0);
+    senderSection.setSpacingBefore(1);
+    
+    const senderInfo = body.appendParagraph('御社名：{{会社名}}　　ご担当者名：{{担当者名}}様　　TEL：{{電話番号}}');
+    senderInfo.editAsText().setFontSize(9);
+    senderInfo.setSpacingAfter(0);
+    senderInfo.setSpacingBefore(0);
+    
+    const senderEmail = body.appendParagraph('メールアドレス：{{メールアドレス}}');
+    senderEmail.editAsText().setFontSize(9);
+    senderEmail.setSpacingAfter(1);
+    senderEmail.setSpacingBefore(0);
+    
+    // === 宛先・基本情報 ===
+    const addresseeInfo = body.appendParagraph('宛名：{{宛名}} {{敬称}}　　工事名：{{工事名}}　　作成日：{{作成日}}');
+    addresseeInfo.editAsText().setFontSize(9);
+    addresseeInfo.setSpacingAfter(0);
+    addresseeInfo.setSpacingBefore(0);
+    
+    const constructionInfo = body.appendParagraph('工事住所：{{工事住所}}');
+    constructionInfo.editAsText().setFontSize(9);
+    constructionInfo.setSpacingAfter(1);
+    constructionInfo.setSpacingBefore(0);
+    
+    // === 業者情報 ===
+    const contractorInfo = body.appendParagraph('{{業者分類1}}：{{業者名1}}　{{業者分類2}}：{{業者名2}}　{{業者分類3}}：{{業者名3}}　{{業者分類4}}：{{業者名4}}');
+    contractorInfo.editAsText().setFontSize(9);
+    contractorInfo.setSpacingAfter(1);
+    contractorInfo.setSpacingBefore(0);
+    
+    // === 商品情報テーブル（必要最小限） ===
+    const productTable = body.appendTable([
       ['出荷年月日', '商品名', '数量', 'ロットNo'],
-      
-      // 商品情報（3行のみ）
       ['{{商品1_出荷日}}', '{{商品1_名前}}', '{{商品1_数量}}', '{{商品1_ロット}}'],
       ['{{商品2_出荷日}}', '{{商品2_名前}}', '{{商品2_数量}}', '{{商品2_ロット}}'],
-      ['{{商品3_出荷日}}', '{{商品3_名前}}', '{{商品3_数量}}', '{{商品3_ロット}}'],
-      
-      // 必要書類・送信先を横並びで圧縮
-      ['【必要書類】{{書類1}}成分表 {{書類2}}SDS {{書類3}}検査表', '【送信先】{{送信先会社名}} {{送信先担当者名}}様', 'TEL：{{送信先電話番号}}', '【備考】{{備考}}'],
-      ['{{書類4}}カタログ {{書類5}}ﾎﾙﾑｱﾙﾃﾞﾋﾄﾞ証明書', 'Email：{{送信先メールアドレス}}', '', '']
+      ['{{商品3_出荷日}}', '{{商品3_名前}}', '{{商品3_数量}}', '{{商品3_ロット}}']
     ]);
     
-    setupCompactTableStyle(allTable);
+    // 商品テーブルのスタイル設定
+    setupProductTableStyle(productTable);
+    
+    // === 必要書類 ===
+    const documentsSection = body.appendParagraph('【必要書類】');
+    documentsSection.editAsText().setFontSize(10).setBold(true);
+    documentsSection.setSpacingAfter(0);
+    documentsSection.setSpacingBefore(1);
+    
+    const documentsInfo = body.appendParagraph('{{書類1}}成分表・試験成績書　{{書類2}}ＳＤＳ　{{書類3}}検査表　{{書類4}}カタログ　{{書類5}}ﾎﾙﾑｱﾙﾃﾞﾋﾄﾞ証明書');
+    documentsInfo.editAsText().setFontSize(9);
+    documentsInfo.setSpacingAfter(1);
+    documentsInfo.setSpacingBefore(0);
+    
+    // === 送信先 ===
+    const destSection = body.appendParagraph('【送信先】');
+    destSection.editAsText().setFontSize(10).setBold(true);
+    destSection.setSpacingAfter(0);
+    destSection.setSpacingBefore(0);
+    
+    const destInfo = body.appendParagraph('会社名：{{送信先会社名}}　　ご担当者名：{{送信先担当者名}}様');
+    destInfo.editAsText().setFontSize(9);
+    destInfo.setSpacingAfter(0);
+    destInfo.setSpacingBefore(0);
+    
+    const destContact = body.appendParagraph('TEL：{{送信先電話番号}}　　Email：{{送信先メールアドレス}}');
+    destContact.editAsText().setFontSize(9);
+    destContact.setSpacingAfter(1);
+    destContact.setSpacingBefore(0);
+    
+    // === 備考 ===
+    const remarksSection = body.appendParagraph('【備考】');
+    remarksSection.editAsText().setFontSize(10).setBold(true);
+    remarksSection.setSpacingAfter(0);
+    remarksSection.setSpacingBefore(0);
+    
+    const remarksInfo = body.appendParagraph('{{備考}}');
+    remarksInfo.editAsText().setFontSize(9);
+    remarksInfo.setSpacingAfter(0);
+    remarksInfo.setSpacingBefore(0);
     
     // 文書を保存
     doc.saveAndClose();
@@ -379,57 +440,33 @@ function createDocumentTemplate() {
   }
 }
 
-// 超コンパクトテーブルスタイル設定関数
-function setupCompactTableStyle(table) {
-  table.setBorderWidth(0.75);
+// 商品テーブル専用スタイル設定
+function setupProductTableStyle(table) {
+  table.setBorderWidth(0.5);
   table.setBorderColor('#000000');
   
-  // 全セルにコンパクトスタイルを適用
   for (let i = 0; i < table.getNumRows(); i++) {
     const row = table.getRow(i);
-    
-    // 行の高さを最小化
-    row.setMinimumHeight(12);
+    row.setMinimumHeight(10);
     
     for (let j = 0; j < row.getNumCells(); j++) {
       const cell = row.getCell(j);
-      
-      // セル内余白を最小化
       cell.setPaddingTop(1);
       cell.setPaddingBottom(1);
       cell.setPaddingLeft(3);
       cell.setPaddingRight(3);
+      cell.editAsText().setFontSize(8);
       
-      // フォントサイズを小さく
-      cell.editAsText().setFontSize(9);
-      
-      // 商品ヘッダー行（5行目）をハイライト
-      if (i === 4) {
+      // ヘッダー行
+      if (i === 0) {
         cell.setBackgroundColor('#f0f0f0');
-        cell.editAsText().setBold(true);
-      }
-      
-      // セクション見出しを太字
-      const text = cell.getText();
-      if (text.includes('【') || text.includes('出荷年月日')) {
         cell.editAsText().setBold(true);
       }
     }
   }
-  
-  // テーブル全体の行間を詰める
-  table.setAttributes({
-    [DocumentApp.Attribute.SPACING_AFTER]: 0,
-    [DocumentApp.Attribute.SPACING_BEFORE]: 0
-  });
 }
 
-// 旧関数との互換性のため残しておく
-function setupTableStyle(table, hasHeader = false) {
-  setupCompactTableStyle(table);
-}
-
-// Google Docsデータ差し込み関数
+// Google Docsデータ差し込み関数（改良版）
 function fillDocumentData(doc, data, managementNumber) {
   try {
     console.log('文書データ差し込み開始...');
@@ -443,7 +480,6 @@ function fillDocumentData(doc, data, managementNumber) {
       '{{会社名}}': data.companyName || '',
       '{{担当者名}}': data.contactPerson || '',
       '{{電話番号}}': data.phoneNumber || '',
-      '{{FAX番号}}': '', // 固定値または空
       '{{メールアドレス}}': data.emailAddress || '',
       '{{宛名}}': data.addressee || '',
       '{{敬称}}': data.honorific || '',
@@ -469,7 +505,7 @@ function fillDocumentData(doc, data, managementNumber) {
       body.replaceText(`{{業者名${i}}}`, contractor ? contractor.name : '');
     }
     
-    // 商品情報の置換（最大3商品に削減）
+    // 商品情報の置換（3商品のみ）
     for (let i = 1; i <= 3; i++) {
       const product = data.products && data.products[i-1];
       if (product) {
@@ -510,7 +546,6 @@ function fillDocumentData(doc, data, managementNumber) {
   }
 }
 
-
 function doGet(e) {
   return ContentService.createTextOutput('Hello World');
 }
@@ -537,7 +572,7 @@ function testFormSubmission() {
         productName: 'ローバル１ｋｇ',
         quantity: '10',
         lotNumber: 'LOT123',
-        shippingDate: '2024-01-20'
+        shipmentDate: '2024-01-20'
       }
     ],
     documents: ['成分表・試験成績書', 'ＳＤＳ'],
