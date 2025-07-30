@@ -14,6 +14,8 @@ const SPREADSHEET_ID = '1tw3L-PQpr2D4o9GMISCQkfEMfR2aqr8aQtYcsqGptYY'; // 中央
 const SHEET_NAME = 'シート1'; // シート名
 const NOTIFICATION_EMAIL = 'YOUR_NOTIFICATION_EMAIL_HERE'; // 通知メールアドレス（オプション）
 
+// 注意: 実際のGoogle Apps Scriptでは、既存のDB_ID、DB_NAME定数を使用してください
+
 /**
  * POST リクエストを処理する関数
  * Webフォームからのデータをスプレッドシートに追加
