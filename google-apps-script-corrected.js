@@ -192,9 +192,14 @@ function generateRequestPDF(data, managementNumber) {
     let templateSheet;
     try {
       templateSheet = spreadsheet.getSheetByName('依頼書テンプレート');
+      if (!templateSheet) {
+        throw new Error('シートが見つかりません');
+      }
     } catch (e) {
+      console.log('テンプレートシート作成中...');
       // テンプレートシートが存在しない場合は作成
       templateSheet = createTemplateSheet(spreadsheet);
+      console.log('テンプレートシート作成完了');
     }
     
     // データをテンプレートに転記
@@ -300,21 +305,44 @@ Email: ${data.emailAddress}
 
 // テンプレートシート作成関数
 function createTemplateSheet(spreadsheet) {
-  const templateSheet = spreadsheet.insertSheet('依頼書テンプレート');
-  
-  // シート設定
-  templateSheet.setColumnWidths(1, 9, 100); // A-I列の幅を100pxに設定
-  templateSheet.setRowHeights(1, 40, 25);   // 行高を25pxに設定
-  
-  // タイトル設定
-  templateSheet.getRange('A1:I1').merge();
-  templateSheet.getRange('A1').setValue('出荷証明書作成依頼書');
-  templateSheet.getRange('A1').setFontSize(16).setFontWeight('bold').setHorizontalAlignment('center');
-  
-  // セクション見出しと枠組みを設定
-  setupTemplateLayout(templateSheet);
-  
-  return templateSheet;
+  try {
+    console.log('新しいテンプレートシート作成中...');
+    
+    // 既存のテンプレートシートを削除（存在する場合）
+    try {
+      const existingSheet = spreadsheet.getSheetByName('依頼書テンプレート');
+      if (existingSheet) {
+        spreadsheet.deleteSheet(existingSheet);
+      }
+    } catch (e) {
+      // シートが存在しない場合は何もしない
+    }
+    
+    const templateSheet = spreadsheet.insertSheet('依頼書テンプレート');
+    
+    if (!templateSheet) {
+      throw new Error('テンプレートシートの作成に失敗しました');
+    }
+    
+    // シート設定
+    templateSheet.setColumnWidths(1, 9, 100); // A-I列の幅を100pxに設定
+    templateSheet.setRowHeights(1, 40, 25);   // 行高を25pxに設定
+    
+    // タイトル設定
+    templateSheet.getRange('A1:I1').merge();
+    templateSheet.getRange('A1').setValue('出荷証明書作成依頼書');
+    templateSheet.getRange('A1').setFontSize(16).setFontWeight('bold').setHorizontalAlignment('center');
+    
+    // セクション見出しと枠組みを設定
+    setupTemplateLayout(templateSheet);
+    
+    console.log('テンプレートシート作成完了');
+    return templateSheet;
+    
+  } catch (error) {
+    console.error('テンプレートシート作成エラー:', error);
+    throw error;
+  }
 }
 
 // テンプレートレイアウト設定
@@ -371,29 +399,75 @@ function setupTemplateLayout(sheet) {
 
 // データ転記関数
 function fillTemplateData(sheet, data, managementNumber) {
+  if (!sheet) {
+    throw new Error('テンプレートシートが存在しません');
+  }
+  
+  console.log('データ転記開始...');
+  
   // 基本情報
   sheet.getRange('B3').setValue(managementNumber);
   sheet.getRange('H3').setValue(data.timestamp || new Date().toLocaleString('ja-JP'));
   
   // 発信元情報
-  sheet.getRange('B6:D6').merge().setValue(data.companyName || '');
-  sheet.getRange('B7:C7').merge().setValue(data.contactPerson || '');
-  sheet.getRange('B8:D8').merge().setValue(data.phoneNumber || '');
-  sheet.getRange('G8:I8').merge().setValue(data.emailAddress || '');
+  try {
+    sheet.getRange('B6:D6').merge();
+    sheet.getRange('B6').setValue(data.companyName || '');
+    
+    sheet.getRange('B7:C7').merge();
+    sheet.getRange('B7').setValue(data.contactPerson || '');
+    
+    sheet.getRange('B8:D8').merge();
+    sheet.getRange('B8').setValue(data.phoneNumber || '');
+    
+    sheet.getRange('G8:I8').merge();
+    sheet.getRange('G8').setValue(data.emailAddress || '');
+  } catch (e) {
+    console.error('発信元情報の設定エラー:', e);
+    // フォールバック：結合せずに単一セルに設定
+    sheet.getRange('B6').setValue(data.companyName || '');
+    sheet.getRange('B7').setValue(data.contactPerson || '');
+    sheet.getRange('B8').setValue(data.phoneNumber || '');
+    sheet.getRange('G8').setValue(data.emailAddress || '');
+  }
   
   // 基本情報
-  sheet.getRange('B10:C10').merge().setValue(data.addressee || '');
-  sheet.getRange('D10').setValue(data.honorific || '');
-  sheet.getRange('B11:G11').merge().setValue(data.constructionName || '');
-  sheet.getRange('B12:G12').merge().setValue(data.constructionAddress || '');
-  sheet.getRange('I12').setValue(data.creationDate || '');
+  try {
+    sheet.getRange('B10:C10').merge();
+    sheet.getRange('B10').setValue(data.addressee || '');
+    sheet.getRange('D10').setValue(data.honorific || '');
+    
+    sheet.getRange('B11:G11').merge();
+    sheet.getRange('B11').setValue(data.constructionName || '');
+    
+    sheet.getRange('B12:G12').merge();
+    sheet.getRange('B12').setValue(data.constructionAddress || '');
+    sheet.getRange('I12').setValue(data.creationDate || '');
+  } catch (e) {
+    console.error('基本情報の設定エラー:', e);
+    // フォールバック
+    sheet.getRange('B10').setValue(data.addressee || '');
+    sheet.getRange('D10').setValue(data.honorific || '');
+    sheet.getRange('B11').setValue(data.constructionName || '');
+    sheet.getRange('B12').setValue(data.constructionAddress || '');
+    sheet.getRange('I12').setValue(data.creationDate || '');
+  }
   
   // 業者情報
   if (data.contractors && data.contractors.length > 0) {
     for (let i = 0; i < Math.min(data.contractors.length, 4); i++) {
       const row = 14 + i;
-      sheet.getRange(`A${row}:B${row}`).merge().setValue(data.contractors[i].type || '');
-      sheet.getRange(`C${row}:F${row}`).merge().setValue(data.contractors[i].name || '');
+      try {
+        sheet.getRange(`A${row}:B${row}`).merge();
+        sheet.getRange(`A${row}`).setValue(data.contractors[i].type || '');
+        sheet.getRange(`C${row}:F${row}`).merge();
+        sheet.getRange(`C${row}`).setValue(data.contractors[i].name || '');
+      } catch (e) {
+        console.error(`業者情報${i+1}の設定エラー:`, e);
+        // フォールバック
+        sheet.getRange(`A${row}`).setValue(data.contractors[i].type || '');
+        sheet.getRange(`C${row}`).setValue(data.contractors[i].name || '');
+      }
     }
   }
   
@@ -401,10 +475,22 @@ function fillTemplateData(sheet, data, managementNumber) {
   if (data.products && data.products.length > 0) {
     for (let i = 0; i < Math.min(data.products.length, 7); i++) {
       const row = 20 + i;
-      sheet.getRange(`A${row}:B${row}`).merge().setValue(data.products[i].shipmentDate || '');
-      sheet.getRange(`C${row}:E${row}`).merge().setValue(data.products[i].productName || '');
-      sheet.getRange(`F${row}`).setValue(data.products[i].quantity || '');
-      sheet.getRange(`G${row}:I${row}`).merge().setValue(data.products[i].lotNumber || '');
+      try {
+        sheet.getRange(`A${row}:B${row}`).merge();
+        sheet.getRange(`A${row}`).setValue(data.products[i].shipmentDate || '');
+        sheet.getRange(`C${row}:E${row}`).merge();
+        sheet.getRange(`C${row}`).setValue(data.products[i].productName || '');
+        sheet.getRange(`F${row}`).setValue(data.products[i].quantity || '');
+        sheet.getRange(`G${row}:I${row}`).merge();
+        sheet.getRange(`G${row}`).setValue(data.products[i].lotNumber || '');
+      } catch (e) {
+        console.error(`商品情報${i+1}の設定エラー:`, e);
+        // フォールバック
+        sheet.getRange(`A${row}`).setValue(data.products[i].shipmentDate || '');
+        sheet.getRange(`C${row}`).setValue(data.products[i].productName || '');
+        sheet.getRange(`F${row}`).setValue(data.products[i].quantity || '');
+        sheet.getRange(`G${row}`).setValue(data.products[i].lotNumber || '');
+      }
     }
   }
   
@@ -424,13 +510,32 @@ function fillTemplateData(sheet, data, managementNumber) {
   });
   
   // 送信先情報
-  sheet.getRange('G29:I29').merge().setValue(data.destCompanyName || '');
-  sheet.getRange('G30:H30').merge().setValue(data.destContactPerson || '');
-  sheet.getRange('G31:I31').merge().setValue(data.destPhoneNumber || '');
-  sheet.getRange('G32:I32').merge().setValue(data.destEmailAddress || '');
+  try {
+    sheet.getRange('G29:I29').merge();
+    sheet.getRange('G29').setValue(data.destCompanyName || '');
+    sheet.getRange('G30:H30').merge();
+    sheet.getRange('G30').setValue(data.destContactPerson || '');
+    sheet.getRange('G31:I31').merge();
+    sheet.getRange('G31').setValue(data.destPhoneNumber || '');
+    sheet.getRange('G32:I32').merge();
+    sheet.getRange('G32').setValue(data.destEmailAddress || '');
+  } catch (e) {
+    console.error('送信先情報の設定エラー:', e);
+    // フォールバック
+    sheet.getRange('G29').setValue(data.destCompanyName || '');
+    sheet.getRange('G30').setValue(data.destContactPerson || '');
+    sheet.getRange('G31').setValue(data.destPhoneNumber || '');
+    sheet.getRange('G32').setValue(data.destEmailAddress || '');
+  }
   
   // 備考
-  sheet.getRange('A36:I37').setValue(data.remarks || '');
+  try {
+    sheet.getRange('A36:I37').merge();
+    sheet.getRange('A36').setValue(data.remarks || '');
+  } catch (e) {
+    console.error('備考の設定エラー:', e);
+    sheet.getRange('A36').setValue(data.remarks || '');
+  }
 }
 
 // テンプレートデータクリア関数
