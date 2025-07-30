@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phase3テスト - 全項目統合</title>
+    <style>
+        body {
+            font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .form-container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #333;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        
+        .section-title {
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #333;
+            background-color: #f0f8ff;
+            padding: 10px;
+            border-left: 4px solid #4CAF50;
+        }
+        
+        .form-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .form-label {
+            min-width: 140px;
+            font-weight: bold;
+            margin-right: 15px;
+            color: #333;
+        }
+        
+        .form-input {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            min-width: 200px;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 5px rgba(76, 175, 80, 0.3);
+        }
+        
+        .required {
+            color: red;
+            font-weight: bold;
+        }
+        
+        /* 業者セクション用スタイル */
+        .contractor-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+        
+        .contractor-label {
+            width: 100px;
+            margin-right: 10px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f5f5f5;
+        }
+        
+        .contractor-name {
+            flex: 1;
+            margin-left: 10px;
+            margin-right: 10px;
+        }
+        
+        .remove-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .remove-btn:hover {
+            background: #c82333;
+        }
+        
+        .add-btn {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
+        .add-btn:hover {
+            background-color: #218838;
+        }
+        
+        /* 商品テーブル用スタイル */
+        .products-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        
+        .products-table th,
+        .products-table td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+        
+        .products-table th {
+            background-color: #f0f8ff;
+            font-weight: bold;
+        }
+        
+        .products-table input {
+            width: 100%;
+            border: none;
+            padding: 5px;
+            font-size: 14px;
+        }
+        
+        .submit-btn {
+            width: 100%;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 15px;
+            font-size: 18px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        
+        .submit-btn:hover {
+            background-color: #0056b3;
+        }
+        
+        .submit-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .status-message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: 600;
+            display: none;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <div class="title">🧪 Phase3テスト - 全項目統合</div>
+        
+        <div class="info status-message" style="display: block;">
+            <strong>テスト範囲:</strong><br>
+            • 【発信元】＋【基本情報】: F28～N28<br>
+            • 【業者情報】: O28～T28（3業者×2列）<br>
+            • 【商品情報】: U28～AH28（7商品×4列）<br>
+            • 【送信先・その他】: AI28～AK28<br>
+            • 合計: F～AK列（36項目）
+        </div>
+        
+        <form id="testForm">
+            <!-- 発信元セクション -->
+            <div class="section">
+                <div class="section-title">【発信元】</div>
+                <div class="form-row">
+                    <span class="form-label">御社名：<span class="required">*</span></span>
+                    <input type="text" class="form-input" id="companyName" required>
+                </div>
+                <div class="form-row">
+                    <span class="form-label">ご担当者名：<span class="required">*</span></span>
+                    <input type="text" class="form-input" id="contactPerson" required>
+                    <span style="margin-left: 10px;">様</span>
+                </div>
+                <div class="form-row">
+                    <span class="form-label">お電話番号：<span class="required">*</span></span>
+                    <input type="text" class="form-input" id="phoneNumber" required>
+                    <span class="form-label" style="margin-left: 20px;">FAX番号：</span>
+                    <input type="text" class="form-input" id="faxNumber">
+                </div>
+                <div class="form-row">
+                    <span class="form-label">メールアドレス：<span class="required">*</span></span>
+                    <input type="email" class="form-input" id="emailAddress" required>
+                </div>
+            </div>
+            
+            <!-- 基本情報セクション -->
+            <div class="section">
+                <div class="section-title">【基本情報】</div>
+                <div class="form-row">
+                    <span class="form-label">宛名：<span class="required">*</span></span>
+                    <input type="text" class="form-input" id="addressee" required>
+                </div>
+                <div class="form-row">
+                    <span class="form-label">敬称：</span>
+                    <input type="text" class="form-input" id="honorific" value="様">
+                </div>
+                <div class="form-row">
+                    <span class="form-label">工事名：<span class="required">*</span></span>
+                    <input type="text" class="form-input" id="constructionName" required>
+                </div>
+                <div class="form-row">
+                    <span class="form-label">工事住所：</span>
+                    <input type="text" class="form-input" id="constructionAddress">
+                </div>
+                <div class="form-row">
+                    <span class="form-label">作成日：</span>
+                    <input type="date" class="form-input" id="creationDate">
+                </div>
+            </div>
+            
+            <!-- 業者情報セクション -->
+            <div class="section">
+                <div class="section-title">【業者情報】</div>
+                <div id="contractorsList">
+                    <div class="contractor-row">
+                        <input type="text" class="contractor-label" value="施工業者" placeholder="業者種別">
+                        <span>：</span>
+                        <input type="text" class="form-input contractor-name" placeholder="業者名を入力">
+                        <button type="button" class="remove-btn" onclick="removeContractor(this)">削除</button>
+                    </div>
+                    <div class="contractor-row">
+                        <input type="text" class="contractor-label" value="塗装業者" placeholder="業者種別">
+                        <span>：</span>
+                        <input type="text" class="form-input contractor-name" placeholder="業者名を入力">
+                        <button type="button" class="remove-btn" onclick="removeContractor(this)">削除</button>
+                    </div>
+                    <div class="contractor-row">
+                        <input type="text" class="contractor-label" value="納品業者" placeholder="業者種別">
+                        <span>：</span>
+                        <input type="text" class="form-input contractor-name" placeholder="業者名を入力">
+                        <button type="button" class="remove-btn" onclick="removeContractor(this)">削除</button>
+                    </div>
+                </div>
+                <button type="button" class="add-btn" onclick="addContractor()">業者を追加</button>
+            </div>
+            
+            <!-- 商品情報セクション -->
+            <div class="section">
+                <div class="section-title">【商品情報】</div>
+                <table class="products-table" id="productsTable">
+                    <thead>
+                        <tr>
+                            <th>出荷年月日</th>
+                            <th>商品名<span class="required">*</span></th>
+                            <th>ロット番号</th>
+                            <th>数量<span class="required">*</span></th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><input type="date" name="shipmentDate[]"></td>
+                            <td><input type="text" name="productName[]" placeholder="商品名" required></td>
+                            <td><input type="text" name="lotNumber[]" placeholder="ロット番号"></td>
+                            <td><input type="number" name="quantity[]" placeholder="数量" required></td>
+                            <td><button type="button" class="remove-btn" onclick="removeProduct(this)">削除</button></td>
+                        </tr>
+                        <tr>
+                            <td><input type="date" name="shipmentDate[]"></td>
+                            <td><input type="text" name="productName[]" placeholder="商品名"></td>
+                            <td><input type="text" name="lotNumber[]" placeholder="ロット番号"></td>
+                            <td><input type="number" name="quantity[]" placeholder="数量"></td>
+                            <td><button type="button" class="remove-btn" onclick="removeProduct(this)">削除</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <button type="button" class="add-btn" onclick="addProduct()">商品を追加</button>
+            </div>
+            
+            <!-- 送信先・その他 -->
+            <div class="section">
+                <div class="section-title">【送信先・その他】</div>
+                <div class="form-row">
+                    <span class="form-label">必要書類：</span>
+                    <div style="display: flex; flex-wrap: wrap; gap: 15px; flex: 1;">
+                        <label><input type="checkbox" name="documents[]" value="出荷証明書" checked> 出荷証明書</label>
+                        <label><input type="checkbox" name="documents[]" value="成分表・試験成績書"> 成分表・試験成績書</label>
+                        <label><input type="checkbox" name="documents[]" value="SDS"> SDS</label>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <span class="form-label">送信先メール：<span class="required">*</span></span>
+                    <input type="email" class="form-input" id="destEmailAddress" required>
+                </div>
+            </div>
+            
+            <button type="submit" class="submit-btn" id="submitBtn">Phase3統合テスト送信</button>
+        </form>
+        
+        <div id="statusMessage" class="status-message"></div>
+    </div>
+
+    <script>
+        // Phase3用Google Apps ScriptのWebアプリURL
+        const TEST_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwzKN2ZeLMYEhzNlPy1ZWRIIG7W95qHDjPUV8Ev8RxnKPY9HkfbuDId2hFaduZv3_y5/exec';
+
+        // 業者追加
+        function addContractor() {
+            const list = document.getElementById('contractorsList');
+            const newRow = document.createElement('div');
+            newRow.className = 'contractor-row';
+            newRow.innerHTML = `
+                <input type="text" class="contractor-label" placeholder="業者種別">
+                <span>：</span>
+                <input type="text" class="form-input contractor-name" placeholder="業者名を入力">
+                <button type="button" class="remove-btn" onclick="removeContractor(this)">削除</button>
+            `;
+            list.appendChild(newRow);
+        }
+
+        // 業者削除
+        function removeContractor(button) {
+            const list = document.getElementById('contractorsList');
+            if (list.children.length > 1) {
+                button.parentNode.remove();
+            } else {
+                alert('最低1つの業者情報は必要です。');
+            }
+        }
+
+        // 商品追加
+        function addProduct() {
+            const tbody = document.querySelector('#productsTable tbody');
+            const newRow = tbody.insertRow();
+            newRow.innerHTML = `
+                <td><input type="date" name="shipmentDate[]"></td>
+                <td><input type="text" name="productName[]" placeholder="商品名"></td>
+                <td><input type="text" name="lotNumber[]" placeholder="ロット番号"></td>
+                <td><input type="number" name="quantity[]" placeholder="数量"></td>
+                <td><button type="button" class="remove-btn" onclick="removeProduct(this)">削除</button></td>
+            `;
+        }
+
+        // 商品削除
+        function removeProduct(button) {
+            const tbody = document.querySelector('#productsTable tbody');
+            if (tbody.rows.length > 1) {
+                button.closest('tr').remove();
+            } else {
+                alert('最低1つの商品情報は必要です。');
+            }
+        }
+
+        // ステータスメッセージ表示
+        function showMessage(message, type) {
+            const messageElement = document.getElementById('statusMessage');
+            messageElement.textContent = message;
+            messageElement.className = `status-message ${type}`;
+            messageElement.style.display = 'block';
+            setTimeout(() => messageElement.style.display = 'none', 10000);
+        }
+
+        // フォーム送信処理
+        document.getElementById('testForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            
+            // 必須項目チェック
+            const requiredFields = [
+                { id: 'companyName', name: '会社名' },
+                { id: 'contactPerson', name: 'ご担当者名' },
+                { id: 'phoneNumber', name: 'お電話番号' },
+                { id: 'emailAddress', name: 'メールアドレス' },
+                { id: 'addressee', name: '宛名' },
+                { id: 'constructionName', name: '工事名' },
+                { id: 'destEmailAddress', name: '送信先メールアドレス' }
+            ];
+            
+            for (let field of requiredFields) {
+                const element = document.getElementById(field.id);
+                if (!element.value.trim()) {
+                    showMessage(`${field.name}は必須項目です。`, 'error');
+                    element.focus();
+                    return;
+                }
+            }
+            
+            // 商品の必須チェック
+            const productNames = document.querySelectorAll('input[name="productName[]"]');
+            const hasProduct = Array.from(productNames).some(input => input.value.trim());
+            if (!hasProduct) {
+                showMessage('最低1つの商品名を入力してください。', 'error');
+                return;
+            }
+            
+            submitBtn.disabled = true;
+            submitBtn.textContent = '送信中...';
+            
+            // データ構築
+            const testData = {
+                // 発信元
+                companyName: document.getElementById('companyName').value.trim(),
+                contactPerson: document.getElementById('contactPerson').value.trim(),
+                phoneNumber: document.getElementById('phoneNumber').value.trim(),
+                faxNumber: document.getElementById('faxNumber').value.trim(),
+                emailAddress: document.getElementById('emailAddress').value.trim(),
+                
+                // 基本情報
+                addressee: document.getElementById('addressee').value.trim(),
+                honorific: document.getElementById('honorific').value.trim(),
+                constructionName: document.getElementById('constructionName').value.trim(),
+                constructionAddress: document.getElementById('constructionAddress').value.trim(),
+                creationDate: document.getElementById('creationDate').value,
+                
+                // 業者情報
+                contractors: [],
+                
+                // 商品情報
+                products: [],
+                
+                // その他
+                documents: [],
+                destEmailAddress: document.getElementById('destEmailAddress').value.trim(),
+                
+                timestamp: new Date().toISOString(),
+                testMode: 'phase3'
+            };
+            
+            // 業者情報収集
+            document.querySelectorAll('.contractor-row').forEach(row => {
+                const type = row.querySelector('.contractor-label').value.trim();
+                const name = row.querySelector('.contractor-name').value.trim();
+                if (type || name) {
+                    testData.contractors.push({ type, name });
+                }
+            });
+            
+            // 商品情報収集
+            document.querySelectorAll('#productsTable tbody tr').forEach(row => {
+                const shipmentDate = row.querySelector('input[name="shipmentDate[]"]').value;
+                const productName = row.querySelector('input[name="productName[]"]').value.trim();
+                const lotNumber = row.querySelector('input[name="lotNumber[]"]').value.trim();
+                const quantity = row.querySelector('input[name="quantity[]"]').value.trim();
+                
+                if (productName) {
+                    testData.products.push({ shipmentDate, productName, lotNumber, quantity });
+                }
+            });
+            
+            // 書類情報収集
+            document.querySelectorAll('input[name="documents[]"]:checked').forEach(checkbox => {
+                testData.documents.push(checkbox.value);
+            });
+            
+            console.log('Phase3送信データ:', testData);
+            
+            try {
+                await fetch(TEST_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(testData)
+                });
+                
+                showMessage(`✅ Phase3統合テスト完了！\n全${Object.keys(testData).length}項目をF～AK列に転記しました`, 'success');
+                
+                // フォームリセット
+                this.reset();
+                document.getElementById('honorific').value = '様';
+                
+            } catch (error) {
+                showMessage('❌ 送信エラー: ' + error.message, 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Phase3統合テスト送信';
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スモールテスト - 会社名のみ</title>
+    <style>
+        body {
+            font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .form-container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #333;
+        }
+        
+        .form-row {
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #333;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 5px rgba(76, 175, 80, 0.3);
+        }
+        
+        .submit-btn {
+            width: 100%;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 15px;
+            font-size: 18px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        
+        .submit-btn:hover {
+            background-color: #0056b3;
+        }
+        
+        .submit-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .status-message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: 600;
+            display: none;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <div class="title">🧪 スモールテスト</div>
+        
+        <div class="info status-message" style="display: block;">
+            <strong>テスト仕様:</strong><br>
+            • 会社名のみ入力<br>
+            • F列28行目に転記<br>
+            • スプレッドシートID: 1xfFlHJihYyhJ-CKP3Aj5veN9c9lanolsTj4kyvR_9R0<br>
+            • シート名: シート1
+        </div>
+        
+        <form id="testForm">
+            <div class="form-row">
+                <label class="form-label" for="companyName">会社名 <span style="color: red;">*</span></label>
+                <input type="text" 
+                       class="form-input" 
+                       id="companyName" 
+                       name="companyName" 
+                       placeholder="テスト会社名を入力してください" 
+                       required>
+            </div>
+            
+            <button type="submit" class="submit-btn" id="submitBtn">送信テスト</button>
+        </form>
+        
+        <div id="statusMessage" class="status-message"></div>
+    </div>
+
+    <script>
+        // テスト用Google Apps ScriptのWebアプリURL（後で更新）
+        const TEST_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwzKN2ZeLMYEhzNlPy1ZWRIIG7W95qHDjPUV8Ev8RxnKPY9HkfbuDId2hFaduZv3_y5/exec';
+
+        // ステータスメッセージを表示
+        function showMessage(message, type) {
+            const messageElement = document.getElementById('statusMessage');
+            messageElement.textContent = message;
+            messageElement.className = `status-message ${type}`;
+            messageElement.style.display = 'block';
+
+            // 5秒後に非表示
+            setTimeout(() => {
+                messageElement.style.display = 'none';
+            }, 5000);
+        }
+
+        // フォーム送信処理
+        document.getElementById('testForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const companyName = document.getElementById('companyName').value.trim();
+            
+            // バリデーション
+            if (!companyName) {
+                showMessage('会社名を入力してください', 'error');
+                return;
+            }
+            
+            // ボタン無効化
+            submitBtn.disabled = true;
+            submitBtn.textContent = '送信中...';
+            
+            // 送信データ（最小限）
+            const testData = {
+                companyName: companyName,
+                timestamp: new Date().toISOString(),
+                testMode: true
+            };
+            
+            console.log('送信データ:', testData);
+            
+            try {
+                const response = await fetch(TEST_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(testData)
+                });
+                
+                console.log('送信完了');
+                showMessage(`✅ テスト送信完了！ 会社名「${companyName}」をF列28行目に送信しました`, 'success');
+                
+                // フォームリセット
+                document.getElementById('companyName').value = '';
+                
+            } catch (error) {
+                console.error('送信エラー:', error);
+                showMessage('❌ 送信エラーが発生しました: ' + error.message, 'error');
+            } finally {
+                // ボタン復活
+                submitBtn.disabled = false;
+                submitBtn.textContent = '送信テスト';
+            }
+        });
+        
+        // ページ読み込み時
+        window.onload = function() {
+            console.log('テストページ読み込み完了');
+            console.log('送信先URL:', TEST_SCRIPT_URL);
+        };
+    </script>
+</body>
+</html>
