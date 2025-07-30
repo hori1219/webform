@@ -328,6 +328,123 @@
             border: 1px solid #f5c6cb;
         }
         
+        /* モーダルスタイル */
+        .modal {
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal-content {
+            background-color: white;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 90%;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            border-bottom: 1px solid #e2e8f0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px 8px 0 0;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+            font-size: 20px;
+        }
+        
+        .close-modal {
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            color: white;
+            opacity: 0.8;
+        }
+        
+        .close-modal:hover {
+            opacity: 1;
+        }
+        
+        .modal-body {
+            padding: 20px;
+        }
+        
+        .modal-footer {
+            padding: 15px 20px;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        
+        /* 確認画面専用スタイル */
+        .confirm-section {
+            margin-bottom: 20px;
+            border: 1px solid #e1e5e9;
+            border-radius: 6px;
+            padding: 15px;
+        }
+        
+        .confirm-section h3 {
+            margin: 0 0 10px 0;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #667eea;
+            color: #2d3748;
+            font-size: 16px;
+        }
+        
+        .confirm-row {
+            display: flex;
+            margin-bottom: 8px;
+            align-items: flex-start;
+        }
+        
+        .confirm-label {
+            min-width: 120px;
+            font-weight: 600;
+            color: #4a5568;
+            flex-shrink: 0;
+        }
+        
+        .confirm-value {
+            color: #2d3748;
+            flex: 1;
+        }
+        
+        .confirm-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        
+        .confirm-table th,
+        .confirm-table td {
+            border: 1px solid #e2e8f0;
+            padding: 8px;
+            text-align: left;
+            font-size: 14px;
+        }
+        
+        .confirm-table th {
+            background-color: #f7fafc;
+            font-weight: 600;
+        }
+        
         /* レスポンシブデザイン */
         @media (max-width: 768px) {
             .form-container {
@@ -355,7 +472,7 @@
     <div class="form-container">
         <div class="title">出荷証明書作成依頼書</div>
         <div class="receipt-number">
-            受付番号：<input type="text" id="receiptNumber" style="border:none; border-bottom:1px solid #ccc; background:transparent; font-weight:bold;" placeholder="自動生成" readonly>
+            管理番号：<input type="text" id="managementNumber" style="border:none; border-bottom:1px solid #ccc; background:transparent; font-weight:bold;" placeholder="送信後に生成" readonly>
         </div>
         
         <form id="certificateForm">
@@ -654,13 +771,40 @@
                 </div>
             </div>
             
+            <!-- 備考欄 -->
+            <div class="section">
+                <h2>【備考】</h2>
+                <div class="form-group">
+                    <label for="remarks">備考・特記事項</label>
+                    <textarea id="remarks" name="remarks" placeholder="その他ご要望や特記事項がございましたらご記入ください" rows="4"></textarea>
+                </div>
+            </div>
+            
             <div class="submit-section">
-                <button type="submit" class="submit-btn" id="submitBtn">送信</button>
+                <button type="button" class="submit-btn" id="confirmBtn" onclick="showConfirmation()">入力内容を確認</button>
+                <button type="button" class="btn btn-secondary" onclick="clearForm()">内容をクリア</button>
                 <button type="button" class="print-btn" onclick="printForm()">印刷</button>
             </div>
         </form>
 
         <div id="statusMessage" class="status-message"></div>
+    </div>
+
+    <!-- 確認画面モーダル -->
+    <div id="confirmationModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>出荷証明書作成依頼書 - 入力内容確認</h2>
+                <span class="close-modal" onclick="closeConfirmation()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="confirmationContent"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeConfirmation()">修正する</button>
+                <button type="button" class="submit-btn" onclick="submitForm()">この内容で送信</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -844,18 +988,9 @@
             console.log('選択された商品:', select.value);
         }
 
-        // 受付番号の自動生成
-        function generateReceiptNumber() {
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            const seconds = String(now.getSeconds()).padStart(2, '0');
-            
-            const receiptNumber = `${year}${month}${day}-${hours}${minutes}-${seconds}`;
-            document.getElementById('receiptNumber').value = receiptNumber;
+        // 管理番号は送信後にサーバーから取得するため、初期化のみ
+        function initializeManagementNumber() {
+            document.getElementById('managementNumber').value = '';
         }
 
         // ステータスメッセージを表示
@@ -937,11 +1072,12 @@
                     body: JSON.stringify(formData)
                 });
 
-                showMessage('✅ 出荷証明書作成依頼が正常に送信されました！', 'success');
+                // no-corsモードではレスポンスの詳細を取得できないため、成功と仮定
+                showMessage('✅ 出荷証明書作成依頼が正常に送信されました！管理番号は送信後に生成されます。', 'success');
                 
                 // フォームをリセット
                 this.reset();
-                generateReceiptNumber();
+                document.getElementById('managementNumber').value = '';
                 
                 // 敬称を初期状態に戻す
                 document.getElementById('honorific').value = '様';
@@ -1043,6 +1179,7 @@
                 destContactPerson: document.getElementById('destContactPerson').value,
                 destPhoneNumber: document.getElementById('destPhoneNumber').value,
                 destEmailAddress: document.getElementById('destEmailAddress').value,
+                remarks: document.getElementById('remarks').value,
                 contractors: [],
                 products: [],
                 documents: []
@@ -1094,6 +1231,198 @@
             return data;
         }
         
+        // 入力確認画面を表示
+        function showConfirmation() {
+            // 必須項目のチェック
+            const requiredFields = [
+                { id: 'companyName', name: '会社名' },
+                { id: 'contactPerson', name: 'ご担当者名' },
+                { id: 'phoneNumber', name: 'お電話番号' },
+                { id: 'emailAddress', name: 'メールアドレス' },
+                { id: 'addressee', name: '宛名' },
+                { id: 'constructionName', name: '工事名' },
+                { id: 'destEmailAddress', name: '送信先メールアドレス' }
+            ];
+            
+            for (let field of requiredFields) {
+                const element = document.getElementById(field.id);
+                if (!element.value.trim()) {
+                    alert(field.name + 'は必須項目です。');
+                    element.focus();
+                    return;
+                }
+            }
+            
+            // 商品チェック
+            const productSelects = document.querySelectorAll('select[name="productName[]"]');
+            let hasProduct = false;
+            for (let select of productSelects) {
+                if (select.value.trim()) {
+                    hasProduct = true;
+                    break;
+                }
+            }
+            
+            if (!hasProduct) {
+                alert('少なくとも1つの商品を選択してください。');
+                return;
+            }
+            
+            // 確認画面の内容を生成
+            generateConfirmationContent();
+            
+            // モーダルを表示
+            document.getElementById('confirmationModal').style.display = 'flex';
+        }
+        
+        // 確認画面の内容を生成
+        function generateConfirmationContent() {
+            const data = collectFormDataNew();
+            let html = '';
+            
+            // 発信元情報
+            html += '<div class="confirm-section">';
+            html += '<h3>【発信元】</h3>';
+            html += `<div class="confirm-row"><span class="confirm-label">会社名：</span><span class="confirm-value">${data.companyName}</span></div>`;
+            html += `<div class="confirm-row"><span class="confirm-label">担当者名：</span><span class="confirm-value">${data.contactPerson}</span></div>`;
+            html += `<div class="confirm-row"><span class="confirm-label">電話番号：</span><span class="confirm-value">${data.phoneNumber}</span></div>`;
+            html += `<div class="confirm-row"><span class="confirm-label">メールアドレス：</span><span class="confirm-value">${data.emailAddress}</span></div>`;
+            html += '</div>';
+            
+            // 基本情報
+            html += '<div class="confirm-section">';
+            html += '<h3>【基本情報】</h3>';
+            html += `<div class="confirm-row"><span class="confirm-label">宛名：</span><span class="confirm-value">${data.addressee} ${data.honorific}</span></div>`;
+            html += `<div class="confirm-row"><span class="confirm-label">工事名：</span><span class="confirm-value">${data.constructionName}</span></div>`;
+            if (data.constructionAddress) {
+                html += `<div class="confirm-row"><span class="confirm-label">工事住所：</span><span class="confirm-value">${data.constructionAddress}</span></div>`;
+            }
+            if (data.creationDate) {
+                html += `<div class="confirm-row"><span class="confirm-label">作成日：</span><span class="confirm-value">${data.creationDate}</span></div>`;
+            }
+            html += '</div>';
+            
+            // 業者情報
+            if (data.contractors.length > 0) {
+                html += '<div class="confirm-section">';
+                html += '<h3>【業者情報】</h3>';
+                data.contractors.forEach(contractor => {
+                    if (contractor.type || contractor.name) {
+                        html += `<div class="confirm-row"><span class="confirm-label">${contractor.type}：</span><span class="confirm-value">${contractor.name}</span></div>`;
+                    }
+                });
+                html += '</div>';
+            }
+            
+            // 商品情報
+            if (data.products.length > 0) {
+                html += '<div class="confirm-section">';
+                html += '<h3>【商品情報】</h3>';
+                html += '<table class="confirm-table">';
+                html += '<thead><tr><th>出荷年月日</th><th>商品名</th><th>数量</th><th>ロット番号</th></tr></thead>';
+                html += '<tbody>';
+                data.products.forEach(product => {
+                    html += '<tr>';
+                    html += `<td>${product.shipmentDate || ''}</td>`;
+                    html += `<td>${product.productName}</td>`;
+                    html += `<td>${product.quantity}</td>`;
+                    html += `<td>${product.lotNumber || ''}</td>`;
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+                html += '</div>';
+            }
+            
+            // 必要書類
+            if (data.documents.length > 0) {
+                html += '<div class="confirm-section">';
+                html += '<h3>【必要書類】</h3>';
+                data.documents.forEach(doc => {
+                    html += `<div class="confirm-row"><span class="confirm-value">✓ ${doc}</span></div>`;
+                });
+                html += '</div>';
+            }
+            
+            // 送信先
+            html += '<div class="confirm-section">';
+            html += '<h3>【送信先】</h3>';
+            if (data.destCompanyName) {
+                html += `<div class="confirm-row"><span class="confirm-label">会社名：</span><span class="confirm-value">${data.destCompanyName}</span></div>`;
+            }
+            if (data.destContactPerson) {
+                html += `<div class="confirm-row"><span class="confirm-label">担当者名：</span><span class="confirm-value">${data.destContactPerson}</span></div>`;
+            }
+            if (data.destPhoneNumber) {
+                html += `<div class="confirm-row"><span class="confirm-label">電話番号：</span><span class="confirm-value">${data.destPhoneNumber}</span></div>`;
+            }
+            html += `<div class="confirm-row"><span class="confirm-label">メールアドレス：</span><span class="confirm-value">${data.destEmailAddress}</span></div>`;
+            html += '</div>';
+            
+            // 備考
+            if (data.remarks) {
+                html += '<div class="confirm-section">';
+                html += '<h3>【備考】</h3>';
+                html += `<div class="confirm-value">${data.remarks.replace(/\n/g, '<br>')}</div>`;
+                html += '</div>';
+            }
+            
+            document.getElementById('confirmationContent').innerHTML = html;
+        }
+        
+        // 確認画面を閉じる
+        function closeConfirmation() {
+            document.getElementById('confirmationModal').style.display = 'none';
+        }
+        
+        // フォームクリア
+        function clearForm() {
+            if (confirm('入力内容をすべてクリアしますか？')) {
+                document.getElementById('certificateForm').reset();
+                initializeManagementNumber();
+                
+                // 敬称を初期状態に戻す
+                document.getElementById('honorific').value = '様';
+                toggleHonorificOther();
+            }
+        }
+        
+        // 実際の送信処理
+        async function submitForm() {
+            try {
+                const formData = collectFormDataNew();
+                const submitBtn = document.querySelector('.modal-footer .submit-btn');
+                
+                submitBtn.disabled = true;
+                submitBtn.textContent = '送信中...';
+                
+                // Google Sheetsに送信
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                // モーダルを閉じる
+                closeConfirmation();
+                
+                // 成功メッセージ
+                showMessage('✅ 出荷証明書作成依頼が正常に送信されました！管理番号は送信後に生成されます。', 'success');
+                
+                // フォームはクリアしない（連続申請対応）
+                
+            } catch (error) {
+                console.error('送信エラー:', error);
+                showMessage('❌ 送信エラーが発生しました。しばらく時間をおいて再試行してください。', 'error');
+            } finally {
+                const submitBtn = document.querySelector('.modal-footer .submit-btn');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'この内容で送信';
+            }
+        }
+        
         // 印刷処理
         function printForm() {
             window.print();
@@ -1101,7 +1430,7 @@
         
         // ページ読み込み時の初期化
         window.onload = function() {
-            generateReceiptNumber();
+            initializeManagementNumber();
         };
 
         // 入力時のリアルタイムバリデーション
