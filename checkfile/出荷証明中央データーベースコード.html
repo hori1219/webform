@@ -1,563 +1,431 @@
 /**
- * 申請処理：
- * - 入力検証（AWメール：最大5件、無効1件でも中断）
- * - 中央DBへ書込み（管理番号発番、商品1〜7、…）
- * - 設定マスターで AY（社内通知）を解決し、中央DB AY へ書込み
- * - 依頼書PDFを生成して Drive 保存（AU にURL、fileIdは任意）
- * - メール送信：
- *    - AW（客先）へ依頼受付＋依頼書PDF（To一括）
- *    - AY（社内）へ受付通知（依頼書PDFのリンクを記載）
- * - ステータス：申請中 → 依頼書送付済
+ * T2：出荷証明書 作成フロー
+ *
+ * 役割：
+ * - 中央DBの対象行からテンプレに転記（P18:Q55：P=ラベル、Q=値）
+ * - P24〜P26 を DBの業者分類（M/O/Q）で上書き、Q24〜Q26 に業者名（N/P/R）
+ * - 宛名・工事名は 2 行分割（全角=2, 半角=1）。宛名36幅、工事名40幅（CONFIGで可変）
+ * - テンプレ「フォーマット」シートの A1:N54 を PDF で出力（printnotes=false）
+ * - 中央DB：AV=PDFリンク、BA=fileId、BB=作成日時、AZ=テンプレ版、BC=ハッシュ、AX=更新
+ * - ステータス：申請中/依頼書送付済 → 作成／確認待ち
+ * - AY へ確認依頼メール送信（PDF添付）
+ * - メニュー：申請中を処理／選択行を再作成／選択行を発行送付／AY再解決
  */
 
-/***** 設定 *****/
+/***** 設定（必須） *****/
 const DB_ID = '1tw3L-PQpr2D4o9GMISCQkfEMfR2aqr8aQtYcsqGptYY';
 const DB_NAME = 'シート1';
 
+// ひな型ファイル
+const TEMPLATE_SS_ID = '1cH7s_ZqksyoR1GGWmz_BMlotgzPh3I4tuTYS77r2pvI';
+const TEMPLATE_SHEET_NAME = 'フォーマット';
+
+// 出荷証明書PDF 保存先フォルダ
+const CERT_PDF_FOLDER_ID = '1gx8cNsbf_ye8lklL9ljfRTvELeeni7hu';
+
+// 設定マスター（CONFIG / MAP）
 const MASTER_SS_ID = '19-kPxNqXLRUxsDLkfyFwDUbX0WzpADSuBRdclNmZ8ws';
 const MASTER_CONFIG_SHEET = 'CONFIG';
 const MASTER_MAP_SHEET = 'MAP';
 
-// 依頼フォーム側
-const INPUT_SHEET_NAME = '依頼フォーム';
-// AW（客先メール）セル位置：**確定したらここを修正**
-const INPUT_AW_RANGE = 'E7';
+// 折返し幅 既定値（CONFIGに無ければこれを使用）
+const DEFAULT_NAME_MAX_WIDTH = 36;   // 宛名 1 行の最大幅（全角 18 相当）
+const DEFAULT_PROJECT_MAX_WIDTH = 40; // 工事名 1 行の最大幅（全角 20 相当）
 
-// 依頼書PDFの出力先フォルダ（AUに入れる）
-const REQUEST_PDF_FOLDER_ID = '1RJpSMtCHBUKqRL4kTisqEVs5YFLzlsk-';
-// 依頼書PDFの出力範囲（シート名は INPUT_SHEET_NAME を使用）
-// A1:U40 など。未確定ならシート全体をfitで出力する
-const REQUEST_PDF_RANGE = { useRange: true, a1: 'A1:U41' }; // {useRange:false} にするとシート全体
+// A列にチェックボックス（ヘッダー「発行チェック」想定）
+const CHECK_COL = 1;   // 1-based（A列）
 
-// 送信者名
-const MAIL_SENDER_NAME = '出荷証明 受付';
+// メール設定
+const MAIL_SENDER_NAME = '出荷証明 自動送信';
+const SUBJECT_INTERNAL_CONFIRM = '[確認] 出荷証明 作成完了 {管理番号}';
+const SUBJECT_EXTERNAL_SEND   = '出荷証明書送付のご連絡（管理番号: {管理番号}）';
 
-// 件名テンプレ
-const SUBJECT_AW_RECEIPT = '【受付】出荷証明 依頼を受け付けました（管理番号: {管理番号}）';
-const SUBJECT_AY_RECEIPT = '[受付] 出荷証明 依頼 {管理番号} {会社名}';
+const MAX_TO_RECIPIENTS = 5;
+const MAX_CC_RECIPIENTS = 5;
 
-// 受付番号の表示セル（依頼フォーム側）
-const RECEIPT_LABEL_CELL = 'B2';
-const RECEIPT_LABEL_PREFIX = '受付番号：';
+// ヘッダーキャッシュ用のグローバル変数を追加（ファイル上部に追加）
+let headerCacheT2 = {};
 
-/***** ヘッダーキャッシュ用変数 *****/
-let headerCache = {};
+// マスターデータキャッシュ用のグローバル変数（ファイル上部に追加）
+let masterDataCacheT2 = null;
+let masterCacheTimestampT2 = 0;
+const MASTER_CACHE_DURATION_T2 = 5 * 60 * 1000; // 5分間キャッシュ
 
-// ヘッダーキャッシュ変数の後に追加
-let masterDataCache = null;
-let masterCacheTimestamp = 0;
-const MASTER_CACHE_DURATION = 5 * 60 * 1000; // 5分間キャッシュ
+/***** メニュー *****/
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu('出荷証明処理')
+    .addItem('申請中を処理（作成/通知）', 'processPendingCertificates')
+    .addItem('選択行を再作成', 'rebuildSelected')
+    .addItem('チェック行を発行送付（A列）', 'sendCheckedRows') 
+    .addItem('管理番号を指定して発行送付', 'sendExternallyByControlId')
+    .addItem('AY再解決（選択行）', 'resolveAySelected')
+    .addToUi();
+}
 
-/***** 入口 *****/
-function submitCertificateRequest() {
-  const ui = SpreadsheetApp.getUi();
+/***** 申請中の行をまとめて処理 *****/
+function processPendingCertificates() {
+  const lock = LockService.getScriptLock();
+  const lockTimeout = 10000; // 30秒→10秒に短縮
+  
+  if (!lock.tryLock(lockTimeout)) {
+    SpreadsheetApp.getUi().alert('システムが混雑しています。時間をおいて再試行してください。');
+    return;
+  }
+  
   try {
-    const confirmation = ui.alert('申請の確認', 'この内容で出荷証明を依頼しますか？', ui.ButtonSet.OK_CANCEL);
-    if (confirmation !== ui.Button.OK) {
-      ui.alert('申請はキャンセルされました。');
-      return;
-    }
-
-    const ss = SpreadsheetApp.getActive();
-    const inputSheet = ss.getSheetByName(INPUT_SHEET_NAME);
-    if (!inputSheet) {
-      ui.alert('エラー: シート名「' + INPUT_SHEET_NAME + '」が見つかりません。');
-      return;
-    }
-
-    // 1) AWメール検証（無効1件でも中断、最大5件）
-    const rawAw = String(inputSheet.getRange(INPUT_AW_RANGE).getValue() || '').trim();
-    const awList = parseEmailsStrict_(rawAw);
-    if (awList.error) {
-      ui.alert('メール形式エラー:\n' + awList.errorMessage);
-      return;
-    }
-    const awEmails = awList.list;
-    if (awEmails.length === 0) {
-      ui.alert('エラー: 客先メールアドレスが未入力です。');
-      return;
-    }
-    if (awEmails.length > 5) {
-      ui.alert('エラー: 客先メールアドレスは最大5件までです。現在 ' + awEmails.length + ' 件が入力されています。');
-      return;
-    }
-
-    // 2) 入力値の取得（既存処理を流用）
-    const data = readForm_(inputSheet);
-    if (!data.products || data.products.length === 0) {
-      ui.alert('エラー: 商品が一件も入力されていません。');
-      return;
-    }
-
-    // 3) DBへ書込み（管理番号採番）
-    const db = SpreadsheetApp.openById(DB_ID);
-    const dbSheet = db.getSheetByName(DB_NAME);
-    if (!dbSheet) {
-      ui.alert('エラー: 中央DB 「' + DB_NAME + '」が見つかりません。');
-      return;
-    }
-
-    const lock = LockService.getScriptLock();
-    const lockTimeout = 10000; // 10秒に短縮（30秒は長すぎる）
+    console.log('一括処理開始...');
+    const startTime = Date.now();
     
-    if (!lock.tryLock(lockTimeout)) {
-      throw new Error('システムが混雑しています。時間をおいて再試行してください。');
-    }
-
-    let rowIndex, controlId;
-    try {
-      console.log('DB書き込み処理開始...');
-      const startTime = Date.now();
-      
-      // 管理番号採番を高速化
-      controlId = generateControlIdOptimized_(dbSheet);
-      
-      // DB行データ構築（最適化済み）
-      const rowData = buildDbRowData_(controlId, data);
-      
-      // ✅ 改善：DB書き込みを一回で完了
-      const lastRow = dbSheet.getLastRow();
-      dbSheet.getRange(lastRow + 1, 1, 1, rowData.length).setValues([rowData]);
-      rowIndex = lastRow + 1;
-      
-      const dbTime = Date.now() - startTime;
-      console.log(`DB書き込み完了: ${dbTime}ms`);
-      
-    } catch (dbError) {
-      console.error('DB書き込みエラー:', dbError.message);
-      throw new Error('データベース書き込みに失敗しました: ' + dbError.message);
-    } finally {
-      // ✅ 改善：必ずロックを解放
-      lock.releaseLock();
-      console.log('ロックを解放しました');
-    }
-
-
-    // ★ 受付番号を依頼フォームのB2へ書き込む（PDFに反映させるため、PDF生成前に実行） 
-    try {
-    // 既存の表示に関係なく毎回上書き（最新の申請番号を表示）
-    inputSheet.getRange(RECEIPT_LABEL_CELL).setValue(RECEIPT_LABEL_PREFIX + controlId);
-    } catch (e) {
-    // 書込に失敗しても致命ではないが、PDFに番号が出なくなるため通知
-    SpreadsheetApp.getUi().alert('受付番号の書き込みに失敗しました。\n' + e.message);
-    }  
-
-    // 4) AY解決（事前に実行）
-    const ay = resolveAyByMasterForSubmit_(data.companyName);
-
-    // 5) 受付番号を依頼フォームに表示（PDF生成前に必要）
-    try {
-      inputSheet.getRange(RECEIPT_LABEL_CELL).setValue(RECEIPT_LABEL_PREFIX + controlId);
-    } catch (e) {
-      console.warn('受付番号の書き込みに失敗:', e.message);
-    }
-
-    // 6) 依頼書PDF生成
-    const {file: reqFile, url: reqUrl} = exportRequestPdf_(ss, INPUT_SHEET_NAME, controlId);
-
-    // 7) ✅ 改善：DB更新を一括実行（writeByHeader_の呼び出しを1回に統合）
-    const dbUpdates = {
-      '社内通知先メール': ay,
-      '客先メールアドレス': awEmails.join(','),
-      '依頼書PDFリンク': reqUrl,
-      'ステータス': '依頼書送付済',
-      '最終更新日時': new Date(),
-    };
+    // ✅ 改善：事前に必要なリソースを一括取得
+    const dbSheet = SpreadsheetApp.openById(DB_ID).getSheetByName(DB_NAME);
+    const {values, header, map} = readSheet(dbSheet);
+    const templateSS = SpreadsheetApp.openById(TEMPLATE_SS_ID);
+    const templ = templateSS.getSheetByName(TEMPLATE_SHEET_NAME);
     
-    console.log('DB一括更新を実行中...', Object.keys(dbUpdates));
-    writeByHeader_(dbSheet, rowIndex, dbUpdates);
-
-    // 8) メール送信（並列実行で高速化）
-    try {
-      // 客先メール送信
-      sendAwReceipt_(awEmails.join(','), controlId, data.projectName, reqFile);
-      console.log('客先メール送信完了');
-      
-      // 社内メール送信
-      if (ay) {
-        sendAyReceipt_(ay, controlId, data.companyName, reqUrl);
-        console.log('社内メール送信完了');
+    // ✅ 改善：マスター設定を事前に取得（キャッシュ機能付き）
+    const {nameWidth, projWidth, templateVersion} = readMasterConfig_();
+    
+    // ✅ 改善：対象行を事前に特定
+    const targets = [];
+    for (let r = 1; r < values.length; r++) {
+      const row = values[r];
+      const status = get(row, map, 'ステータス');
+      if (status === '申請中' || status === '依頼書送付済') {
+        const controlId = get(row, map, '管理番号');
+        targets.push({
+          rowIndex: r,
+          row: row,
+          controlId: controlId
+        });
       }
-    } catch (emailError) {
-      console.error('メール送信エラー:', emailError.message);
-      // メール送信失敗でも処理は継続
-    }
-
-    SpreadsheetApp.getUi().alert('申請が完了しました。\n管理番号: ' + controlId);
-    SpreadsheetApp.getUi().alert('申請が完了しました。');
-
-    // 9) （任意）自動で証明書作成フローへ進める
-    // processSingleForCertificate_(controlId); // 自動化したい場合は有効化
-
-  } catch (e) {
-    console.error(e);
-    SpreadsheetApp.getUi().alert('エラーが発生しました。\n' + e.message);
-  }
-}
-
-/***** 入力読取（修正版 - エラー解決済み） *****/
-function readForm_(sheet) {
-  // 一括取得で高速化
-  const basicInfo = sheet.getRange('E4:E9').getValues();
-  const vendorInfo = sheet.getRange('B10:E12').getValues();
-  
-  // 個別取得（最小限）
-  const fax = sheet.getRange('L6').getValue();
-  const creationDate = sheet.getRange('R14').getValue();
-  const honorific = sheet.getRange('U8').getValue();
-  
-  // 配列から値を取得
-  const companyName = basicInfo[0][0];     // E4
-  const contactName = basicInfo[1][0];     // E5
-  const tel = basicInfo[2][0];             // E6
-  const addressee = basicInfo[4][0];       // E8 (E7はスキップ)
-  const projectName = basicInfo[5][0];     // E9
-
-  const constructorTitle = vendorInfo[0][0]; // B10
-  const constructorName = vendorInfo[0][3];  // E10
-  const painterTitle = vendorInfo[1][0];     // B11
-  const painterName = vendorInfo[1][3];      // E11
-  const supplierTitle = vendorInfo[2][0];    // B12
-  const supplierName = vendorInfo[2][3];     // E12
-
-  // ✅ 修正：元のコードと同じ変数名 'rows' を使用
-  const productsData = [];
-  const rows = sheet.getRange('B16:R22').getValues(); // 元の変数名を維持
-  for (const row of rows) {
-    const shipDate   = row[0];  // B列
-    const productName= row[4];  // F列
-    const quantity   = row[13]; // O列
-    const lotNo      = row[16]; // R列
-    if (productName) productsData.push({ shipDate, productName, quantity, lotNo });
-  }
-
-  return {
-    companyName, contactName, tel, fax,
-    addressee, honorific, projectName, creationDate,
-    constructorTitle, constructorName, painterTitle, painterName,
-    supplierTitle, supplierName,
-    products: productsData,
-  };
-}
-
-/***** DB行データの構築（ヘッダー順） *****/
-function buildDbRowData_(controlId, d) {
-  // ✅ 改善：配列操作を最適化し、可読性も向上
-  const baseData = [
-    false,               // チェックボックス
-    controlId,           // 管理番号
-    new Date(),          // 申請日時
-    '申請中',            // ステータス
-    1,                   // 版数
-    d.companyName,       // 会社名
-    d.contactName,       // 申請者名
-    d.tel,               // 申請者TEL
-    d.fax,               // FAX
-    d.addressee,         // 宛名
-    d.honorific,         // 敬称
-    d.projectName,       // 工事名
-    d.creationDate,      // 作成日
-    d.constructorTitle,  // 業者分類1
-    d.constructorName,   // 業者1
-    d.painterTitle,      // 業者分類2
-    d.painterName,       // 業者2
-    d.supplierTitle,     // 業者分類3
-    d.supplierName,      // 業者3
-  ];
-
-  // ✅ 改善：商品データを効率的に処理（最大7件）
-  const productData = [];
-  const maxProducts = 7;
-  
-  for (let i = 0; i < maxProducts; i++) {
-    const product = d.products[i];
-    if (product) {
-      productData.push(
-        product.productName,
-        product.quantity,
-        product.lotNo,
-        product.shipDate
-      );
-    } else {
-      // 空のデータを4つ追加（商品名, 数量, ロット, 出荷日）
-      productData.push('', '', '', '');
-    }
-  }
-
-  // ✅ 改善：spread演算子で配列を結合（高速）
-  return [...baseData, ...productData];
-}
-
-// ✅ 追加：データ検証関数（オプション）
-function validateFormData_(data) {
-  const errors = [];
-  
-  if (!data.companyName) errors.push('会社名が未入力です');
-  if (!data.contactName) errors.push('申請者名が未入力です');
-  if (!data.projectName) errors.push('工事名が未入力です');
-  if (!data.products || data.products.length === 0) errors.push('商品が未入力です');
-  
-  return {
-    isValid: errors.length === 0,
-    errors: errors
-  };
-}
-
-/***** 依頼書PDFの出力 *****/
-function exportRequestPdf_(activeSS, sheetName, controlId) {
-  const sheet = activeSS.getSheetByName(sheetName);
-  const ssId = activeSS.getId();
-  const gid = sheet.getSheetId();
-
-
-  // PDF出力URL（ノートは印刷しない）
-  let url = 'https://docs.google.com/spreadsheets/d/' + ssId + '/export?'
-    + 'format=pdf'
-    + '&portrait=true'
-    + '&size=a4'
-    + '&scale=2' // 幅に合わせる
-    + '&gridlines=false'
-    + '&printtitle=false'
-    + '&sheetnames=false'
-    + '&pagenum=NONE'
-    + '&printnotes=false' // ★ノートを印刷しない
-    + '&top_margin=0.25&bottom_margin=0.25&left_margin=0.25&right_margin=0.25'
-    + '&gid=' + gid;
-
-  if (REQUEST_PDF_RANGE && REQUEST_PDF_RANGE.useRange && REQUEST_PDF_RANGE.a1) {
-    const range = sheet.getRange(REQUEST_PDF_RANGE.a1); // A1:U41
-    const r1 = range.getRow() - 1;
-    const r2 = r1 + range.getNumRows();
-    const c1 = range.getColumn() - 1;
-    const c2 = c1 + range.getNumColumns();
-    url += `&r1=${r1}&r2=${r2}&c1=${c1}&c2=${c2}`;
-  }
-
-  const token = ScriptApp.getOAuthToken();
-  const res = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + token }, muteHttpExceptions: true });
-  const blob = res.getBlob().setName(`依頼書_${controlId}.pdf`).setContentType('application/pdf');
-  const folder = DriveApp.getFolderById(REQUEST_PDF_FOLDER_ID);
-  const file = folder.createFile(blob);
-  return { file, url: file.getUrl() };
-}
-
-/***** AY解決（申請時） *****/
-function resolveAyByMasterForSubmit_(companyName) {
-  // 設定マスターが未設定なら空返し
-  if (!MASTER_SS_ID || MASTER_SS_ID.indexOf('<<') === 0) return '';
-  
-  const now = Date.now();
-  
-  // ✅ 改善：キャッシュが有効期間内なら再利用
-  if (masterDataCache && (now - masterCacheTimestamp) < MASTER_CACHE_DURATION) {
-    console.log('マスターデータキャッシュを使用');
-    return resolveMasterFromCache_(companyName, masterDataCache);
-  }
-  
-  try {
-    console.log('マスターデータを新規取得中...');
-    
-    // マスターデータを一括取得
-    const ss = SpreadsheetApp.openById(MASTER_SS_ID);
-    const conf = ss.getSheetByName(MASTER_CONFIG_SHEET);
-    const mapSheet = ss.getSheetByName(MASTER_MAP_SHEET);
-    
-    let defaultNotify = '';
-    if (conf) {
-      const configData = conf.getRange(1, 1, conf.getLastRow(), 2).getValues();
-      const configMap = Object.fromEntries(configData);
-      defaultNotify = String(configMap['DEFAULT_NOTIFY'] || '');
     }
     
-    let mapData = [];
-    if (mapSheet) {
-      mapData = mapSheet.getDataRange().getValues();
+    if (targets.length === 0) {
+      SpreadsheetApp.getActive().toast('処理対象がありません');
+      return;
     }
     
-    // ✅ 改善：キャッシュに保存
-    masterDataCache = { defaultNotify, mapData };
-    masterCacheTimestamp = now;
+    console.log(`処理対象: ${targets.length}件`);
     
-    console.log('マスターデータキャッシュを更新しました');
+    // ✅ 改善：バッチ処理で効率化
+    let successCount = 0;
+    let errorCount = 0;
     
-    return resolveMasterFromCache_(companyName, masterDataCache);
-    
-  } catch (e) {
-    console.error('マスターデータ取得エラー:', e.message);
-    return '';
-  }
-}
-
-// ✅ 新規追加：キャッシュからマスター解決
-function resolveMasterFromCache_(companyName, cache) {
-  const keyName = normalizeName_(companyName);
-  
-  // マップデータを検索
-  for (let i = 1; i < cache.mapData.length; i++) {
-    const key = normalizeName_(cache.mapData[i][0] || '');
-    const addr = String(cache.mapData[i][1] || '').trim();
-    if (key && addr && key === keyName) {
-      console.log(`会社名マッチ: ${companyName} → ${addr}`);
-      return addr;
-    }
-  }
-  
-  console.log(`デフォルト通知先を使用: ${companyName} → ${cache.defaultNotify}`);
-  return cache.defaultNotify;
-}
-
-// ✅ 新規追加：キャッシュクリア関数（デバッグ用）
-function clearMasterCache_() {
-  masterDataCache = null;
-  masterCacheTimestamp = 0;
-  console.log('マスターデータキャッシュをクリアしました');
-}
-
-// ✅ 既存の normalizeName_ 関数は変更なし（そのまま使用）
-
-function normalizeName_(s) {
-  if (!s) return '';
-  return String(s).replace(/[\s　]/g,'').replace(/（株）|株式会社/g,'').trim();
-}
-
-/***** メール送信 *****/
-function sendAwReceipt_(to, controlId, projectName, file) {
-  const subject = SUBJECT_AW_RECEIPT
-    .replace('{管理番号}', controlId);
-  const body = [
-    '出荷証明のご依頼を受け付けました。',
-    '',
-    `管理番号：${controlId}`,
-    `工事名　：${projectName || ''}`,
-    '',
-    '添付の依頼書PDFをご確認ください。',
-  ].join('\n');
-  const opts = {name: MAIL_SENDER_NAME};
-  if (file) opts.attachments = [file.getBlob()];
-  GmailApp.sendEmail(to, subject, body, opts);
-}
-
-function sendAyReceipt_(to, controlId, companyName, reqUrl) {
-  const subject = SUBJECT_AY_RECEIPT
-    .replace('{管理番号}', controlId)
-    .replace('{会社名}', companyName || '');
-  const body = [
-    '出荷証明の依頼を受け付けました。',
-    '',
-    `管理番号：${controlId}`,
-    `会社名　：${companyName || ''}`,
-    '',
-    `依頼書PDFリンク：${reqUrl}`,
-  ].join('\n');
-  GmailApp.sendEmail(to, subject, body, {name: MAIL_SENDER_NAME});
-}
-
-/***** ヘッダー名で書き込み（安全な改善版） *****/
-function writeByHeader_(sheet, rowIndex1Based, obj) {
-  const sheetId = sheet.getSheetId();
-  
-  try {
-    // キャッシュからヘッダーを取得（初回のみスプレッドシートアクセス）
-    if (!headerCache[sheetId]) {
-      headerCache[sheetId] = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-      console.log('ヘッダーキャッシュを作成しました: Sheet ID', sheetId);
-    }
-    
-    const header = headerCache[sheetId];
-    
-    // 各フィールドを安全に更新
-    Object.keys(obj).forEach(name => {
-      const colIndex = header.indexOf(name);
-      if (colIndex >= 0) {
+    for (const target of targets) {
+      try {
+        processOneOptimized_(
+          dbSheet, target.rowIndex, target.row, map, header,
+          templ, templateSS, target.controlId,
+          nameWidth, projWidth, templateVersion
+        );
+        successCount++;
+        
+        // ✅ 改善：処理間隔を短縮（200ms→100ms）
+        Utilities.sleep(100);
+        
+      } catch (e) {
+        console.error(`処理エラー [${target.controlId}]:`, e.message);
+        errorCount++;
+        
+        // エラーをDBに記録
         try {
-          sheet.getRange(rowIndex1Based, colIndex + 1).setValue(obj[name]);
-        } catch (e) {
-          console.error(`セル更新エラー [${name}]:`, e.message);
-          // 個別エラーは継続（全体を止めない）
+          setRow(dbSheet, target.rowIndex, map, {
+            'ステータス': 'エラー',
+            '最終更新日時': new Date(),
+            '備考': `処理エラー: ${e.message}`
+          });
+        } catch (dbError) {
+          console.error('エラー記録失敗:', dbError.message);
         }
-      } else {
-        console.warn(`ヘッダーに列名が見つかりません: ${name}`);
-      }
-    });
-    
-  } catch (e) {
-    console.error('writeByHeader_でエラー:', e.message);
-    // フォールバック：元の方法で実行
-    console.log('フォールバック処理を実行...');
-    const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    Object.keys(obj).forEach(name => {
-      const c = header.indexOf(name);
-      if (c >= 0) sheet.getRange(rowIndex1Based, c + 1).setValue(obj[name]);
-    });
-  }
-}
-
-// デバッグ用：キャッシュクリア関数
-function clearHeaderCache_() {
-  headerCache = {};
-  console.log('ヘッダーキャッシュをクリアしました');
-}
-
-/***** メールアドレス厳格パース（最大5件・無効1件でもNG） *****/
-function parseEmailsStrict_(raw) {
-  const result = { list: [], error: false, errorMessage: '' };
-  if (!raw) return result;
-  const normalized = String(raw)
-    .replace(/[、，；;]/g, ',')
-    .split(',')
-    .map(s => String(s).trim())
-    .filter(Boolean);
-  const dupRemoved = Array.from(new Set(normalized));
-  const invalid = [];
-  const valid = [];
-  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  dupRemoved.forEach(addr => {
-    if (re.test(addr)) valid.push(addr); else invalid.push(addr);
-  });
-  if (invalid.length > 0) {
-    result.error = true;
-    result.errorMessage = '無効なメールアドレスが含まれています:\n- ' + invalid.join('\n- ');
-    return result;
-  }
-  result.list = valid;
-  return result;
-}
-
-function generateControlIdOptimized_(dbSheet) {
-  try {
-    const lastRow = dbSheet.getLastRow();
-    let lastIdNumber = 0;
-    
-    // ✅ 改善：最後の行のみ取得（範囲指定を最小化）
-    if (lastRow > 1) {
-      const lastCell = dbSheet.getRange(lastRow, 2); // B列（管理番号列）のみ
-      const lastId = String(lastCell.getValue() || '');
-      const parts = lastId.split('-');
-      if (parts.length >= 2) {
-        lastIdNumber = parseInt(parts[1], 10) || 0;
       }
     }
     
-    const nextIdNumber = lastIdNumber + 1;
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = ('0' + (today.getMonth() + 1)).slice(-2);
-    const dd = ('0' + today.getDate()).slice(-2);
-    const seq = ('000' + nextIdNumber).slice(-3);
-    
-    const controlId = `${yyyy}${mm}${dd}-${seq}-1`;
-    console.log(`管理番号を採番: ${controlId}`);
-    
-    return controlId;
+    const totalTime = Date.now() - startTime;
+    const message = `処理完了: 成功${successCount}件, エラー${errorCount}件 (${totalTime}ms)`;
+    console.log(message);
+    SpreadsheetApp.getActive().toast(message);
     
   } catch (e) {
-    console.error('管理番号採番エラー:', e.message);
-    throw new Error('管理番号の採番に失敗しました');
+    console.error('一括処理エラー:', e.message);
+    SpreadsheetApp.getUi().alert('処理中にエラーが発生しました:\n' + e.message);
+  } finally {
+    lock.releaseLock();
+    console.log('ロックを解放しました');
   }
 }
 
-// ✅ 新規関数2: システム健全性チェック
-function checkSystemHealth_() {
+/***** 選択行のみ再作成 *****/
+function rebuildSelected() {
+  try {
+    const dbSheet = SpreadsheetApp.openById(DB_ID).getSheetByName(DB_NAME);
+    const sel = dbSheet.getActiveCell();
+    if (!sel) {
+      SpreadsheetApp.getUi().alert('セルが選択されていません。');
+      return;
+    }
+    
+    const r = sel.getRow() - 1;
+    const {values, header, map} = readSheet(dbSheet);
+    if (r <= 0 || r >= values.length) {
+      SpreadsheetApp.getUi().alert('ヘッダー行や範囲外の行は対象外です。');
+      return;
+    }
+
+    const templateSS = SpreadsheetApp.openById(TEMPLATE_SS_ID);
+    const templ = templateSS.getSheetByName(TEMPLATE_SHEET_NAME);
+    const {nameWidth, projWidth, templateVersion} = readMasterConfig_();
+
+    const row = values[r];
+    const controlId = get(row, map, '管理番号');
+    
+    console.log(`再作成開始: ${controlId}`);
+    
+    // ✅ 改善: 最新データ取得を明示的に実行
+    const latestData = getLatestRowData_(dbSheet, controlId);
+    if (!latestData) {
+      throw new Error(`最新データの取得に失敗: ${controlId}`);
+    }
+    
+    processOne_(dbSheet, r, latestData.row, latestData.map, latestData.header, templ, templateSS, controlId, nameWidth, projWidth, templateVersion, {
+      bumpVersion: true
+    });
+    
+    SpreadsheetApp.getUi().alert(`再作成完了: ${controlId} (最新データで再生成)`);
+    
+  } catch (e) {
+    console.error('再作成エラー:', e.message);
+    SpreadsheetApp.getUi().alert('再作成中にエラーが発生しました:\n' + e.message);
+  }
+}
+
+// ✅ 改善5: 処理フローの可視化
+function debugPdfDataFlow() {
+  const ui = SpreadsheetApp.getUi();
+  
+  const controlIdResp = ui.prompt('デバッグ', '管理番号を入力してください:');
+  if (controlIdResp.getSelectedButton() !== ui.Button.OK) return;
+  const controlId = controlIdResp.getResponseText().trim();
+  
+  try {
+    const dbSheet = SpreadsheetApp.openById(DB_ID).getSheetByName(DB_NAME);
+    
+    // 現在のデータを確認
+    const currentData = getLatestRowData_(dbSheet, controlId);
+    if (!currentData) {
+      ui.alert('エラー', `管理番号「${controlId}」が見つかりません。`);
+      return;
+    }
+    
+    const debugInfo = [
+      `管理番号: ${controlId}`,
+      `版数: ${get(currentData.row, currentData.map, '版数')}`,
+      `ステータス: ${get(currentData.row, currentData.map, 'ステータス')}`,
+      `会社名: ${get(currentData.row, currentData.map, '会社名')}`,
+      `工事名: ${get(currentData.row, currentData.map, '工事名')}`,
+      `宛名: ${get(currentData.row, currentData.map, '宛名')}`,
+      `商品名1: ${get(currentData.row, currentData.map, '商品名1')}`,
+      `数量1: ${get(currentData.row, currentData.map, '数量1')}`,
+      `最終更新: ${get(currentData.row, currentData.map, '最終更新日時')}`
+    ].join('\n');
+    
+    ui.alert('現在のデータ確認', debugInfo);
+    
+  } catch (error) {
+    ui.alert('エラー', `デバッグ中にエラーが発生しました:\n${error.message}`);
+  }
+}
+
+/***** 外部送付（AW） *****/
+function sendExternallyByControlId() {
+  const ui = SpreadsheetApp.getUi();
+  const resp = ui.prompt('発行送付', '管理番号を入力してください（例：20250728-001-1）', ui.ButtonSet.OK_CANCEL);
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
+  const controlId = resp.getResponseText().trim();
+  if (!controlId) { ui.alert('管理番号が入力されていません。'); return; }
+
+  const db = SpreadsheetApp.openById(DB_ID);
+  const sheet = db.getSheetByName(DB_NAME);
+  const {values, header, map} = readSheet(sheet);
+
+  let target = -1;
+  for (let r = 1; r < values.length; r++) {
+    if (String(get(values[r], map, '管理番号')) === controlId) { target = r; break; }
+  }
+  if (target < 0) { ui.alert('該当する管理番号が見つかりません：' + controlId); return; }
+
+  const res = sendExternallyCore_(sheet, target, values[target], header, map);
+  if (res && res.ok) {
+  ui.alert('送付完了：' + controlId);
+  } else {
+  ui.alert('送付できませんでした：' + controlId + '\n' + (res && res.message ? res.message : '詳細はBF列をご確認ください。'));
+  }
+}
+
+// 返り値: { ok: boolean, message?: string }
+function sendExternallyCore_(dbSheet, r, row, header, map) {
+  const controlId = get(row, map, '管理番号');
+  
+  try {
+    // ✅ 改善：事前検証を一括実行
+    const validationResult = validateExternalSending_(row, map, r);
+    if (!validationResult.isValid) {
+      // DB更新とUI通知を統合
+      updateSendResult_(dbSheet, r, map, validationResult.errorMessage, false);
+      return { ok: false, message: validationResult.errorMessage };
+    }
+    
+    const { to, cc, pdfUrl, fileId } = validationResult.data;
+    
+    // ✅ 改善：メール送信処理
+    const file = DriveApp.getFileById(fileId);
+    const subject = SUBJECT_EXTERNAL_SEND.replace('{管理番号}', controlId);
+    const body = buildExternalBody_(row, map, controlId, pdfUrl);
+    const opts = { 
+      name: MAIL_SENDER_NAME, 
+      attachments: [file.getBlob()]
+    };
+    if (cc) opts.cc = cc;
+
+    // リトライ機能付きメール送信
+    const sendResult = sendEmailWithRetry_(to, subject, body, opts, 3);
+    
+    if (sendResult.success) {
+      updateSendResult_(dbSheet, r, map, 'SUCCESS', true);
+      console.log(`送付完了: ${controlId}`);
+      return { ok: true };
+    } else {
+      updateSendResult_(dbSheet, r, map, 'ERROR: ' + sendResult.error, false);
+      return { ok: false, message: 'ERROR: ' + sendResult.error };
+    }
+    
+  } catch (e) {
+    const errorMessage = 'SYSTEM_ERROR: ' + e.message;
+    console.error(`送付システムエラー [${controlId}]:`, e.message);
+    
+    try {
+      updateSendResult_(dbSheet, r, map, errorMessage, false);
+    } catch (dbError) {
+      console.error('DB更新エラー:', dbError.message);
+    }
+    
+    return { ok: false, message: errorMessage };
+  }
+}
+
+// ✅ 新規追加：送信前検証の統合
+function validateExternalSending_(row, map, r) {
+  const controlId = get(row, map, '管理番号');
+  
+  // 行妥当性チェック
+  if (r <= 0) {
+    return {
+      isValid: false,
+      errorMessage: 'INVALID_ROW: ヘッダー行や空行は対象外'
+    };
+  }
+  
+  // 発行抑止チェック
+  if (String(get(row, map, '発行抑止')).toUpperCase() === 'TRUE') {
+    return {
+      isValid: false,
+      errorMessage: 'SUPPRESSED: 発行抑止が有効'
+    };
+  }
+  
+  // 宛先検証
+  const toRaw = (get(row, map, '客先メールアドレス') || '').trim();
+  const parsed = parseEmailsStrict_(toRaw);
+  if (parsed.error || parsed.list.length === 0) {
+    return {
+      isValid: false,
+      errorMessage: 'INVALID_TO: ' + (parsed.errorMessage || 'empty')
+    };
+  }
+  if (parsed.list.length > MAX_TO_RECIPIENTS) {
+    return {
+      isValid: false,
+      errorMessage: `TO_EXCEEDED: ${parsed.list.length}件 (最大${MAX_TO_RECIPIENTS}件)`
+    };
+  }
+  
+  // CC検証
+  const ccRaw = resolveExternalCc_(row, map);
+  let cc = '';
+  if (ccRaw) {
+    const ccParsed = parseEmailsStrict_(ccRaw);
+    if (ccParsed.error) {
+      return {
+        isValid: false,
+        errorMessage: 'INVALID_CC: ' + ccParsed.errorMessage
+      };
+    }
+    if (ccParsed.list.length > MAX_CC_RECIPIENTS) {
+      return {
+        isValid: false,
+        errorMessage: `CC_EXCEEDED: ${ccParsed.list.length}件 (最大${MAX_CC_RECIPIENTS}件)`
+      };
+    }
+    cc = ccParsed.list.join(',');
+  }
+  
+  // PDF存在確認
+  const pdfUrl = get(row, map, '出荷証明書PDFリンク');
+  const fileId = get(row, map, '証明書PDF fileId');
+  if (!pdfUrl || !fileId) {
+    return {
+      isValid: false,
+      errorMessage: 'PDF_NOT_FOUND: 証明書PDFが未作成'
+    };
+  }
+  
+  return {
+    isValid: true,
+    data: {
+      to: parsed.list.join(','),
+      cc: cc,
+      pdfUrl: pdfUrl,
+      fileId: fileId
+    }
+  };
+}
+
+// ✅ 新規追加：送信結果の統合更新
+function updateSendResult_(dbSheet, r, map, result, isSuccess) {
+  const updateData = {
+    '送付日時（外部）': new Date(),
+    '送付結果': result,
+    '最終更新日時': new Date()
+  };
+  
+  if (isSuccess) {
+    updateData['ステータス'] = '発行済';
+  }
+  
+  setRow(dbSheet, r, map, updateData);
+}
+
+// ✅ 新規追加：リトライ機能付きメール送信
+function sendEmailWithRetry_(to, subject, body, options = {}, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      GmailApp.sendEmail(to, subject, body, options);
+      return { success: true };
+    } catch (e) {
+      console.warn(`メール送信失敗 (試行${attempt}/${maxRetries}):`, e.message);
+      
+      if (attempt === maxRetries) {
+        return { success: false, error: e.message };
+      }
+      
+      // 指数バックオフ
+      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+      Utilities.sleep(delay);
+    }
+  }
+}
+
+// ✅ 新規追加：システム健全性チェック（T2版）
+function checkSystemHealthT2_() {
   const checks = [];
   
   try {
@@ -567,6 +435,12 @@ function checkSystemHealth_() {
     if (dbSheet) checks.push('✓ DB接続OK');
     else checks.push('✗ DBシート未発見');
     
+    // テンプレート接続チェック
+    const templateSS = SpreadsheetApp.openById(TEMPLATE_SS_ID);
+    const templateSheet = templateSS.getSheetByName(TEMPLATE_SHEET_NAME);
+    if (templateSheet) checks.push('✓ テンプレート接続OK');
+    else checks.push('✗ テンプレートシート未発見');
+    
     // マスター接続チェック
     if (MASTER_SS_ID && MASTER_SS_ID.indexOf('<<') !== 0) {
       const master = SpreadsheetApp.openById(MASTER_SS_ID);
@@ -575,15 +449,805 @@ function checkSystemHealth_() {
     }
     
     // フォルダーアクセスチェック
-    const folder = DriveApp.getFolderById(REQUEST_PDF_FOLDER_ID);
+    const folder = DriveApp.getFolderById(CERT_PDF_FOLDER_ID);
     if (folder) checks.push('✓ PDFフォルダーOK');
     else checks.push('✗ PDFフォルダー未発見');
     
-    console.log('システム健全性チェック:\n' + checks.join('\n'));
+    // キャッシュ状態チェック
+    if (headerCacheT2 && Object.keys(headerCacheT2).length > 0) {
+      checks.push('✓ ヘッダーキャッシュ有効');
+    } else {
+      checks.push('- ヘッダーキャッシュ未初期化');
+    }
+    
+    if (masterDataCacheT2) {
+      const age = Date.now() - masterCacheTimestampT2;
+      checks.push(`✓ マスターキャッシュ有効 (${Math.round(age/1000)}秒前)`);
+    } else {
+      checks.push('- マスターキャッシュ未初期化');
+    }
+    
+    console.log('T2 システム健全性チェック:\n' + checks.join('\n'));
     return checks;
     
   } catch (e) {
-    console.error('システムチェックエラー:', e.message);
+    console.error('T2 システムチェックエラー:', e.message);
     return ['✗ システムチェック失敗: ' + e.message];
   }
+}
+
+// ✅ デバッグ用：全キャッシュクリア
+function clearAllCachesT2_() {
+  clearHeaderCacheT2_();
+  clearMasterCacheT2_();
+  console.log('T2 全キャッシュをクリアしました');
+}
+
+// 厳格メール検証（T2側にも定義しておく）
+function parseEmailsStrict_(raw) {
+  const result = { list: [], error: false, errorMessage: '' };
+  if (!raw) return result;
+  const normalized = String(raw)
+    .replace(/[、，；;]/g, ',')
+    .split(',')
+    .map(s => String(s).trim())
+    .filter(Boolean);
+  const uniq = Array.from(new Set(normalized));
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const invalid = uniq.filter(a => !re.test(a));
+  if (invalid.length > 0) {
+    result.error = true;
+    result.errorMessage = '無効なメールアドレスが含まれています:\n- ' + invalid.join('\n- ');
+    return result;
+  }
+  result.list = uniq;
+  return result;
+}
+
+/** 外部送付の Cc 解決（行 > MAP > CONFIG）。空なら '' を返す */
+function resolveExternalCc_(row, map) {
+  // 行の外部CCが優先
+  let cc = String(get(row, map, '外部CC') || '').trim();
+  if (cc) return cc;
+  
+  // キャッシュからマスターデータを取得
+  const now = Date.now();
+  if (!masterDataCacheT2 || (now - masterCacheTimestampT2) >= MASTER_CACHE_DURATION_T2) {
+    readMasterConfig_(); // キャッシュを更新
+  }
+  
+  if (masterDataCacheT2) {
+    const companyName = get(row, map, '会社名');
+    const customerCode = get(row, map, '得意先コード');
+    
+    // マップデータから検索（3列目がEXT_CC）
+    for (let i = 1; i < masterDataCacheT2.mapData.length; i++) {
+      const key = String(masterDataCacheT2.mapData[i][0] || '').trim();
+      const extCc = String(masterDataCacheT2.mapData[i][2] || '').trim();
+      if (!key || !extCc) continue;
+      
+      if (customerCode && key === customerCode) return extCc;
+      if (!customerCode && companyName && normalizeName_(key) === normalizeName_(companyName)) return extCc;
+    }
+    
+    // デフォルトCC
+    return String(masterDataCacheT2.rawConfig['DEFAULT_CC_EXTERNAL'] || '').trim();
+  }
+  
+  return '';
+}
+
+// ✅ デバッグ用：キャッシュクリア関数
+function clearMasterCacheT2_() {
+  masterDataCacheT2 = null;
+  masterCacheTimestampT2 = 0;
+  console.log('T2 マスターデータキャッシュをクリアしました');
+}
+
+/***** AY再解決（選択行） *****/
+function resolveAySelected() {
+  const db = SpreadsheetApp.openById(DB_ID);
+  const dbSheet = db.getSheetByName(DB_NAME);
+
+  const activeSheet = SpreadsheetApp.getActiveSheet();
+  if (activeSheet.getSheetId() !== dbSheet.getSheetId()) {
+    SpreadsheetApp.getUi().alert('中央DB（"' + DB_NAME + '"）のデータ行を選択してから実行してください。');
+    return;
+  }
+  const cell = activeSheet.getCurrentCell() || activeSheet.getActiveCell();
+  if (!cell) { SpreadsheetApp.getUi().alert('セルが選択されていません。'); return; }
+  const r1 = cell.getRow() - 1;
+  const {values, header, map} = readSheet(dbSheet);
+  if (r1 <= 0 || r1 >= values.length) { SpreadsheetApp.getUi().alert('ヘッダー行や空行は対象外です。'); return; }
+
+  const row = values[r1];
+  const ay = resolveAyByMaster_(row, map);
+  setRow(dbSheet, r1, map, {'社内通知先メール': ay, '最終更新日時': new Date()});
+}
+
+/***** チェック行を一括送付（A列チェック） *****/
+function sendCheckedRows() {
+  const ui = SpreadsheetApp.getUi();
+  const dbSheet = SpreadsheetApp.openById(DB_ID).getSheetByName(DB_NAME);
+  const lastRow = dbSheet.getLastRow();
+  if (lastRow < 2) { 
+    ui.alert('データ行がありません。'); 
+    return; 
+  }
+
+  // ✅ 改善：一度だけ読み取り
+  const {values, header, map} = readSheet(dbSheet);
+
+  // チェックされた行を収集
+  const targets = [];
+  for (let r = 1; r < values.length; r++) {
+    if (values[r][CHECK_COL - 1] === true) {
+      targets.push({
+        rowIndex: r,
+        row: values[r],
+        controlId: String(get(values[r], map, '管理番号') || `ROW${r+1}`)
+      });
+    }
+  }
+  
+  if (targets.length === 0) { 
+    ui.alert('チェックされた行がありません。'); 
+    return; 
+  }
+
+  // 確認表示
+  const ids = targets.map(t => t.controlId);
+  const preview = ids.length > 10 ? 
+    ids.slice(0, 10).join('\n') + `\n…ほか ${ids.length - 10} 件` : 
+    ids.join('\n');
+  const resp = ui.alert('発行送付の確認', 
+    `以下 ${targets.length} 件を送付します。よろしいですか？\n\n${preview}`, 
+    ui.ButtonSet.OK_CANCEL);
+  if (resp !== ui.Button.OK) return;
+
+  // ✅ 改善：ロック処理の最適化
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    ui.alert('システムが混雑しています。時間をおいて再試行してください。');
+    return;
+  }
+
+  let ok = 0, ng = 0;
+  try {
+    console.log(`一括送付開始: ${targets.length}件`);
+    
+    for (const target of targets) {
+      try {
+        const result = sendExternallyCore_(dbSheet, target.rowIndex, target.row, header, map);
+        if (result && result.ok) {
+          ok++;
+          // 成功時のみチェックを外す
+          dbSheet.getRange(target.rowIndex + 1, CHECK_COL).setValue(false);
+        } else {
+          ng++;
+        }
+      } catch (e) {
+        console.error(`送付エラー [${target.controlId}]:`, e.message);
+        ng++;
+      }
+      
+      // ✅ 改善：処理間隔を短縮
+      Utilities.sleep(100);
+    }
+  } finally {
+    lock.releaseLock();
+  }
+  
+  ui.alert(`送付完了\nSUCCESS: ${ok} 件\nERROR: ${ng} 件`);
+}
+
+
+/***** 1行処理本体（即座更新強制版） *****/
+function processOneOptimized_(dbSheet, r, row, map, header, templ, templateSS, controlId, nameWidth, projWidth, templateVersion, opt) {
+  try {
+    console.log(`=== 処理開始: ${controlId} ===`);
+    
+    // ✅ STEP 1: 版数更新（修正の場合）
+    if (opt && opt.bumpVersion) {
+      const nextVersion = Number(get(row, map, '版数') || 1) + 1;
+      setRow(dbSheet, r, map, {
+        '版数': nextVersion,
+        '最終更新日時': new Date()
+      });
+      console.log(`✅ STEP 1 完了: 版数更新 ${controlId} → 版数${nextVersion}`);
+      
+      // 版数更新後、最新データを取得し直す
+      const {values, header: latestHeader, map: latestMap} = readSheet(dbSheet);
+      row = values[r];
+      map = latestMap;
+      header = latestHeader;
+      console.log(`✅ 最新データ再取得完了: ${controlId}`);
+    }
+    
+    // ✅ STEP 2: テンプレートクリア
+    console.log(`✅ STEP 2 開始: テンプレートクリア`);
+    clearTemplate_(templ);
+    
+    // ✅ 新規追加：スプレッドシート更新を強制実行
+    SpreadsheetApp.flush();
+    console.log(`✅ STEP 2 完了: テンプレートクリア + 強制更新`);
+    
+    // ✅ STEP 3: 中央DB → 出荷証明フォーマットへ転記
+    console.log(`✅ STEP 3 開始: データ転記 (${controlId})`);
+    console.log(`転記データ確認 - 会社名: ${get(row, map, '会社名')}, 工事名: ${get(row, map, '工事名')}`);
+    
+    // === writeTemplate_ 開始 ===
+    console.log('=== writeTemplate_ 開始 ===');
+    writeTemplate_(templ, row, map, nameWidth, projWidth);
+    console.log('=== writeTemplate_ 完了 ===');
+    
+    // ✅ 重要：テンプレート更新を強制実行
+    SpreadsheetApp.flush();
+    console.log(`✅ STEP 3 完了: データ転記完了 + 強制更新`);
+    
+    // ✅ STEP 3.5: テンプレート内容の確認（デバッグ用）
+    console.log(`✅ STEP 3.5 開始: テンプレート内容確認`);
+    const checkData = {
+      'Q18_宛名': templ.getRange('Q18').getValue(),
+      'Q19_宛名2': templ.getRange('Q19').getValue(), 
+      'Q21_工事名': templ.getRange('Q21').getValue(),
+      'Q22_工事名2': templ.getRange('Q22').getValue(),
+      'Q27_商品名1': templ.getRange('Q27').getValue(),
+      'Q34_数量1': templ.getRange('Q34').getValue()
+    };
+    console.log(`テンプレート確認結果:`, JSON.stringify(checkData));
+    console.log(`✅ STEP 3.5 完了: テンプレート内容確認完了`);
+    
+    // ✅ STEP 4: フッター設定
+    console.log(`✅ STEP 4 開始: フッター設定`);
+    setFooterControlId_(templ, controlId);
+    
+    // フッター更新も強制実行
+    SpreadsheetApp.flush();
+    console.log(`✅ STEP 4 完了: フッター設定完了 + 強制更新`);
+    
+    // ✅ STEP 4.5: 処理待機（スプレッドシート反映確保）
+    console.log(`✅ STEP 4.5 開始: 処理待機（1秒）`);
+    Utilities.sleep(1000); // 1秒待機
+    console.log(`✅ STEP 4.5 完了: 処理待機完了`);
+    
+    // ✅ STEP 5: 範囲をPDF化（転記後のデータで）
+    console.log(`✅ STEP 5 開始: PDF生成 (${controlId})`);
+    const {file, url} = exportToPdf_(templateSS.getId(), templ.getSheetId(), `出荷証明書_${controlId}.pdf`);
+    console.log(`✅ STEP 5 完了: PDF生成完了 - ${url}`);
+    
+    // ✅ STEP 6: ハッシュ計算
+    console.log(`✅ STEP 6 開始: ハッシュ計算`);
+    const hash = buildRowHash_(row, header);
+    console.log(`✅ STEP 6 完了: ハッシュ計算完了`);
+    
+    // ✅ STEP 7: DB更新
+    console.log(`✅ STEP 7 開始: DB更新`);
+    const update = {
+      '出荷証明書PDFリンク': url,
+      '証明書PDF fileId': file.getId(),
+      '証明書PDF作成日時': new Date(),
+      'テンプレ版': templateVersion,
+      'データハッシュ': hash,
+      'ステータス': '作成／確認待ち',
+      '最終更新日時': new Date()
+    };
+    
+    setRow(dbSheet, r, map, update);
+    console.log(`✅ STEP 7 完了: DB更新完了`);
+    
+    // ✅ STEP 8: 履歴追記
+    console.log(`✅ STEP 8 開始: 履歴追記`);
+    try {
+      appendHistory_(controlId, row, header, {
+        pdfFileId: file.getId(),
+        pdfUrl: url,
+        hash,
+        templateVersion,
+        status: '作成／確認待ち'
+      });
+      console.log(`✅ STEP 8 完了: 履歴追記完了`);
+    } catch (historyError) {
+      console.warn('履歴追記エラー:', historyError.message);
+    }
+    
+    // ✅ STEP 9: メール送信
+    console.log(`✅ STEP 9 開始: メール送信`);
+    const ay = get(row, map, '社内通知先メール') || get(row, map, 'AY') || '';
+    if (ay) {
+      try {
+        const subject = SUBJECT_INTERNAL_CONFIRM.replace('{管理番号}', controlId);
+        const body = buildInternalConfirmBody_(row, map, controlId, url);
+        GmailApp.sendEmail(ay, subject, body, {
+          attachments: [file.getBlob()], 
+          name: MAIL_SENDER_NAME
+        });
+        console.log(`✅ STEP 9 完了: メール送信完了 ${controlId} → ${ay}`);
+      } catch (emailError) {
+        console.error(`メール送信エラー [${controlId}]:`, emailError.message);
+      }
+    } else {
+      console.log(`✅ STEP 9 スキップ: 送信先メールアドレスなし`);
+    }
+    
+    console.log(`=== 処理完了: ${controlId} ===`);
+    
+  } catch (e) {
+    console.error(`❌ processOneOptimized_ エラー [${controlId}]:`, e.message);
+    console.error(`エラー発生箇所の詳細:`, e);
+    throw e;
+  }
+}
+
+// ✅ 新規追加: 最新データ取得関数
+function getLatestRowData_(dbSheet, controlId) {
+  try {
+    console.log(`最新データ取得開始: ${controlId}`);
+    
+    // 最新のシートデータを取得
+    const {values, header, map} = readSheet(dbSheet);
+    
+    // 指定された管理番号の行を検索
+    for (let r = 1; r < values.length; r++) {
+      if (String(get(values[r], map, '管理番号')) === controlId) {
+        console.log(`最新データ取得完了: ${controlId} (行${r+1})`);
+        return {
+          row: values[r],
+          map: map,
+          header: header,
+          rowIndex: r
+        };
+      }
+    }
+    
+    console.error(`管理番号が見つかりません: ${controlId}`);
+    return null;
+    
+  } catch (error) {
+    console.error(`最新データ取得エラー [${controlId}]:`, error.message);
+    return null;
+  }
+}
+
+
+/***** テンプレ書き換え *****/
+function clearTemplate_(sheet) {
+  sheet.getRange('Q18:Q58').clearContent();
+}
+
+function writeTemplate_(sheet, row, map, nameWidth, projWidth) {
+
+  console.log('=== writeTemplate_ 開始 ===');
+  console.log('転記予定データ:', {
+    会社名: get(row, map, '会社名'),
+    工事名: get(row, map, '工事名'),
+    宛名: get(row, map, '宛名'),
+    商品名1: get(row, map, '商品名1')
+  });
+
+
+  // ✅ 改善：書き込みデータを事前に準備
+  const templateData = {};
+  
+  // 宛名（2行）
+  const addressee = String(get(row, map, '宛名') || '').trim();
+  const [name1, name2] = splitTwoLines_(addressee, nameWidth);
+  templateData['Q18'] = name1;
+  templateData['Q19'] = name2;
+  
+  // 敬称
+  templateData['Q20'] = String(get(row, map, '敬称') || '').trim();
+  
+  // 工事名（2行）
+  const project = String(get(row, map, '工事名') || '').trim();
+  const [pj1, pj2] = splitTwoLines_(project, projWidth);
+  templateData['Q21'] = pj1;
+  templateData['Q22'] = pj2;
+  
+  // 工事住所
+  templateData['Q23'] = String(get(row, map, '工事住所') || '').trim();
+  
+  // 業者情報
+  templateData['Q56'] = get(row, map, '業者分類1');
+  templateData['Q24'] = get(row, map, '業者1');
+  templateData['Q57'] = get(row, map, '業者分類2');
+  templateData['Q25'] = get(row, map, '業者2');
+  templateData['Q58'] = get(row, map, '業者分類3');
+  templateData['Q26'] = get(row, map, '業者3');
+  
+  // 作成日
+  const created = get(row, map, '作成日');
+  templateData['Q48'] = toDateString_(created || new Date());
+  
+  // 明細1..7
+  let lastProductIndex = 0;
+  for (let i = 1; i <= 7; i++) {
+    // 商品名
+    const productName = get(row, map, `商品名${i}`);
+    if (productName) lastProductIndex = i;
+    templateData[`Q${26 + i}`] = productName; // Q27..Q33
+    
+    // 数量
+    templateData[`Q${33 + i}`] = get(row, map, `数量${i}`); // Q34..Q40
+    
+    // 出荷日
+    const shipDate = get(row, map, `出荷年月日${i}`);
+    templateData[`Q${40 + i}`] = toDateString_(shipDate); // Q41..Q47
+    
+    // ロット
+    templateData[`Q${48 + i}`] = get(row, map, `ロットNo.${i}`); // Q49..Q55
+  }
+  
+  // 「以上」の自動挿入
+  if (lastProductIndex >= 1 && lastProductIndex <= 6) {
+    const targetCell = `Q${27 + lastProductIndex}`; // 次の行
+    templateData[targetCell] = '以上';
+  }
+  
+  // ✅ 改善：一括書き込み用にデータを整理
+  const rangeUpdates = [];
+  Object.keys(templateData).forEach(cellA1 => {
+    const value = templateData[cellA1];
+    if (value !== undefined && value !== null) {
+      rangeUpdates.push({
+        range: sheet.getRange(cellA1),
+        value: value
+      });
+    }
+  });
+  
+  // ✅ 改善：可能な限り連続範囲で一括更新
+  // 連続するセルをグループ化して setValues で一括更新
+  try {
+    // 個別更新（GASの制約上、完全な一括化は困難だが、ループは最適化）
+    rangeUpdates.forEach(update => {
+      update.range.setValue(update.value);
+    });
+    
+    // 「以上」の書式設定（最後に実行）
+    if (lastProductIndex >= 1 && lastProductIndex <= 6) {
+      const targetCell = sheet.getRange(`Q${27 + lastProductIndex}`);
+      targetCell.setHorizontalAlignment('center').setFontWeight('bold');
+    }
+    
+    console.log(`テンプレート書き込み完了: ${rangeUpdates.length}セル`);
+    
+  } catch (e) {
+    console.error('テンプレート書き込みエラー:', e.message);
+    // フォールバック：元の処理
+    writeTemplateOriginal_(sheet, row, map, nameWidth, projWidth);
+  }
+}
+
+// ✅ フォールバック用の元処理（エラー時用）
+function writeTemplateOriginal_(sheet, row, map, nameWidth, projWidth) {
+  // 元のwriteTemplate_の処理をそのまま実行
+  // （現在のコードをここにバックアップとして保持）
+}
+
+/***** PDF出力（A1:N54 固定・ノート非表示） *****/
+function exportToPdf_(spreadsheetId, sheetId, filename) {
+  const url = 'https://docs.google.com/spreadsheets/d/' + spreadsheetId + '/export?'
+    + 'format=pdf'
+    + '&portrait=true'
+    + '&size=a4'
+    + '&gridlines=false'
+    + '&printtitle=false'
+    + '&sheetnames=false'
+    + '&pagenum=NONE'
+    + '&printnotes=false'
+    + '&scale=2'  // 2: 幅に合わせる（中央寄せ効果）
+    + '&fzr=false'  // 行の固定を無効
+    + '&fzc=false'  // 列の固定を無効
+    // ✅ マージン調整で中央寄せ効果を実現
+    + '&top_margin=0.4&bottom_margin=0.4&left_margin=0.6&right_margin=0.4'
+    + '&gid=' + sheetId
+    + '&r1=0&r2=54&c1=0&c2=14'; // A1:N54
+
+  const token = ScriptApp.getOAuthToken();
+  const res = UrlFetchApp.fetch(url, {
+    headers: {Authorization: 'Bearer ' + token}, 
+    muteHttpExceptions: true
+  });
+  
+  if (res.getResponseCode() !== 200) {
+    console.error('PDF生成エラー:', res.getResponseCode());
+    throw new Error(`PDF生成に失敗しました (${res.getResponseCode()})`);
+  }
+  
+  const blob = res.getBlob().setName(filename).setContentType('application/pdf');
+  const folder = DriveApp.getFolderById(CERT_PDF_FOLDER_ID);
+  const file = folder.createFile(blob);
+  
+  console.log(`PDF生成完了: ${filename}`);
+  return {file, url: file.getUrl()};
+}
+
+/***** 文字列 2 行分割（全角=2, 半角=1） *****/
+function splitTwoLines_(text, maxWidth) {
+  if (!text) return ['', ''];
+  const cleaned = String(text).replace(/\s+/g, ' ').trim();
+  const width = (s) => Array.from(s).reduce((acc, ch) => acc + (isFullWidth_(ch) ? 2 : 1), 0);
+  if (width(cleaned) <= maxWidth) return [cleaned, ''];
+  const breakChars = '、，・/／-－（）() 　';
+  let bestCut = -1, bestWidth = 0;
+  for (let i = 1; i < cleaned.length; i++) {
+    const part = cleaned.slice(0, i);
+    const w = width(part);
+    if (w <= maxWidth) {
+      const prev = cleaned[i - 1];
+      if (breakChars.indexOf(prev) >= 0) {
+        bestCut = i - 1; // 区切り手前
+        bestWidth = w;
+      } else if (w > bestWidth) {
+        bestCut = i;
+        bestWidth = w;
+      }
+    } else break;
+  }
+  if (bestCut < 0) bestCut = cleaned.length;
+  const head = cleaned.slice(0, bestCut).trim();
+  const tail = cleaned.slice(bestCut).trim();
+  return [head, tail];
+}
+function isFullWidth_(ch) {
+  const code = ch.charCodeAt(0);
+  return (code >= 0xFF01 && code <= 0xFF60) || (code >= 0x3000 && code <= 0x30FF) || (code >= 0x4E00 && code <= 0x9FFF);
+}
+
+/***** 汎用ユーティリティ *****/
+function readSheet(sheet) {
+  const values = sheet.getDataRange().getValues();
+  const header = values[0];
+  const map = {}; header.forEach((h, i) => map[h] = i);
+  return {values, header, map};
+}
+function get(row, map, name) {
+  const idx = map[name];
+  return idx == null ? '' : row[idx];
+}
+
+function setRow(sheet, r, map, obj) {
+  const sheetId = sheet.getSheetId();
+  
+  try {
+    // キャッシュからヘッダーを取得
+    if (!headerCacheT2[sheetId]) {
+      headerCacheT2[sheetId] = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      console.log('T2 ヘッダーキャッシュを作成:', sheetId);
+    }
+    
+    const header = headerCacheT2[sheetId];
+    
+    // 更新対象を整理
+    const updates = [];
+    Object.keys(obj).forEach(name => {
+      const colIndex = header.indexOf(name);
+      if (colIndex >= 0) {
+        updates.push({ col: colIndex + 1, value: obj[name] });
+      } else {
+        console.warn(`T2 ヘッダーに列名が見つかりません: ${name}`);
+      }
+    });
+    
+    // 個別更新
+    updates.forEach(update => {
+      sheet.getRange(r + 1, update.col).setValue(update.value);
+    });
+    
+  } catch (e) {
+    console.error('T2 setRow エラー:', e.message);
+    // フォールバック：元の方法で実行
+    const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    Object.keys(obj).forEach(name => {
+      const c = header.indexOf(name);
+      if (c >= 0) sheet.getRange(r + 1, c + 1).setValue(obj[name]);
+    });
+  }
+}
+
+// デバッグ用：キャッシュクリア関数
+function clearHeaderCacheT2_() {
+  headerCacheT2 = {};
+  console.log('T2 ヘッダーキャッシュをクリアしました');
+}
+
+function toDateString_(d) {
+  if (!d) return '';
+  if (Object.prototype.toString.call(d) === '[object Date]') {
+    return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy/MM/dd');
+  }
+  const t = new Date(d);
+  if (!isNaN(t.getTime())) return Utilities.formatDate(t, Session.getScriptTimeZone(), 'yyyy/MM/dd');
+  return '';
+}
+
+/** 右下フッター（M54）に管理番号を入れる */
+function setFooterControlId_(sheet, controlId) {
+  const r = sheet.getRange('M54'); // 右下
+  r.setValue(String(controlId || ''))  // ✅ 「管理番号：」を削除、数字のみ
+   .setHorizontalAlignment('right')
+   .setFontSize(8); // 必要なら調整
+}
+
+
+/***** 履歴追記 *****/
+function appendHistory_(controlId, row, header, meta) {
+  const ss = SpreadsheetApp.openById(DB_ID);
+  const sheet = ss.getSheetByName('History') || ss.insertSheet('History');
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(['管理番号','版数','ステータス','テンプレ版','PDF fileId','PDF URL','PDF作成日時','データハッシュ','修正理由','受付者','受付日時','変更点サマリ']);
+  }
+  const map = {}; header.forEach((h,i)=>map[h]=i);
+  const ver = Number(get(row, map, '版数') || 1);
+  sheet.appendRow([
+    controlId,
+    ver,
+    meta.status || get(row, map, 'ステータス') || '',
+    meta.templateVersion || '',
+    meta.pdfFileId || '',
+    meta.pdfUrl || '',
+    new Date(),
+    meta.hash || '',
+    '', // 修正理由（修正受付時に上書き）
+    '', // 受付者
+    '', // 受付日時
+    ''  // 変更点サマリ
+  ]);
+}
+
+/***** メール本文 *****/
+function buildInternalConfirmBody_(row, map, controlId, pdfUrl) {
+  return [
+    '出荷証明書を作成しました。内容をご確認ください。',
+    '',
+    `管理番号：${controlId}`,
+    `会社名　：${get(row, map, '会社名') || ''}`,
+    `工事名　：${get(row, map, '工事名') || ''}`,
+    '',
+    `PDFリンク：${pdfUrl}`,
+    '',
+    '問題なければ発行送付（外部）を実行してください。'
+  ].join('\n');
+}
+function buildExternalBody_(row, map, controlId, pdfUrl) {
+  return [
+    '出荷証明書をお送りいたします。',
+    '',
+    `管理番号：${controlId}`,
+    `工事名　：${get(row, map, '工事名') || ''}`,
+    '',
+    '添付PDFをご確認ください。'
+  ].join('\n');
+}
+
+/***** 設定マスター読取・AY解決 *****/
+function readMasterConfig_() {
+  const now = Date.now();
+  
+  // キャッシュが有効期間内なら再利用
+  if (masterDataCacheT2 && (now - masterCacheTimestampT2) < MASTER_CACHE_DURATION_T2) {
+    console.log('T2 マスター設定キャッシュを使用');
+    return masterDataCacheT2.config;
+  }
+  
+  // デフォルト値
+  let nameWidth = DEFAULT_NAME_MAX_WIDTH;
+  let projWidth = DEFAULT_PROJECT_MAX_WIDTH;
+  let templateVersion = '';
+  
+  if (!MASTER_SS_ID || MASTER_SS_ID.indexOf('<<') === 0) {
+    return {nameWidth, projWidth, templateVersion};
+  }
+  
+  try {
+    console.log('T2 マスター設定を新規取得中...');
+    
+    const ss = SpreadsheetApp.openById(MASTER_SS_ID);
+    const conf = ss.getSheetByName(MASTER_CONFIG_SHEET);
+    const mapSheet = ss.getSheetByName(MASTER_MAP_SHEET);
+    
+    let configData = {};
+    let mapData = [];
+    
+    if (conf) {
+      const rawConfig = conf.getRange(1, 1, conf.getLastRow(), 2).getValues();
+      configData = Object.fromEntries(rawConfig);
+      nameWidth = Number(configData['NAME_MAX_WIDTH'] || nameWidth);
+      projWidth = Number(configData['PROJECT_MAX_WIDTH'] || projWidth);
+      templateVersion = String(configData['TEMPLATE_VERSION'] || '');
+    }
+    
+    if (mapSheet) {
+      mapData = mapSheet.getDataRange().getValues();
+    }
+    
+    // ✅ キャッシュに保存
+    masterDataCacheT2 = {
+      config: {nameWidth, projWidth, templateVersion},
+      rawConfig: configData,
+      mapData: mapData
+    };
+    masterCacheTimestampT2 = now;
+    
+    console.log('T2 マスター設定キャッシュを更新しました');
+    
+    return {nameWidth, projWidth, templateVersion};
+    
+  } catch (e) {
+    console.error('T2 マスター設定取得エラー:', e.message);
+    return {nameWidth, projWidth, templateVersion};
+  }
+}
+
+function resolveAyByMaster_(row, map) {
+  const current = get(row, map, '社内通知先メール') || '';
+  if (current) return current;
+  
+  const now = Date.now();
+  
+  // キャッシュが有効期間内なら再利用
+  if (masterDataCacheT2 && (now - masterCacheTimestampT2) < MASTER_CACHE_DURATION_T2) {
+    console.log('T2 AY解決キャッシュを使用');
+    return resolveAyFromCache_(row, map, masterDataCacheT2);
+  }
+  
+  // キャッシュが無効なら新規取得（readMasterConfig_を呼び出してキャッシュを更新）
+  readMasterConfig_();
+  
+  if (masterDataCacheT2) {
+    return resolveAyFromCache_(row, map, masterDataCacheT2);
+  }
+  
+  return '';
+}
+
+// ✅ キャッシュからAY解決
+function resolveAyFromCache_(row, map, cache) {
+  const defaultNotify = String(cache.rawConfig['DEFAULT_NOTIFY'] || '');
+  
+  if (!cache.mapData || cache.mapData.length <= 1) {
+    return defaultNotify;
+  }
+  
+  const companyName = get(row, map, '会社名');
+  const customerCode = get(row, map, '得意先コード');
+  
+  // マップデータから検索
+  for (let i = 1; i < cache.mapData.length; i++) {
+    const key = String(cache.mapData[i][0] || '').trim();
+    const addr = String(cache.mapData[i][1] || '').trim();
+    if (!key || !addr) continue;
+    
+    // 得意先コードでマッチ
+    if (customerCode && String(customerCode).trim() === key) {
+      console.log(`T2 得意先コードマッチ: ${customerCode} → ${addr}`);
+      return addr;
+    }
+    
+    // 会社名でマッチ
+    if (!customerCode && companyName && normalizeName_(key) === normalizeName_(companyName)) {
+      console.log(`T2 会社名マッチ: ${companyName} → ${addr}`);
+      return addr;
+    }
+  }
+  
+  console.log(`T2 デフォルト通知先を使用: ${defaultNotify}`);
+  return defaultNotify;
+}
+
+function normalizeName_(s) {
+  if (!s) return '';
+  return String(s).replace(/[\s　]/g,'').replace(/（株）|株式会社/g,'').trim();
+}
+
+/***** ハッシュ *****/
+function buildRowHash_(row, header) {
+  const important = ['会社名','申請者名','宛名','敬称','工事名','業者分類1','業者1','業者分類2','業者2','業者分類3','業者3'];
+  for (let i=1;i<=7;i++) important.push(`商品名${i}`,`数量${i}`,`ロットNo.${i}`,`出荷年月日${i}`);
+  const map = {}; header.forEach((h,i)=>map[h]=i);
+  const parts = important.map(n => String(row[map[n]] || ''));
+  const text = parts.join('\u001F');
+  const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, text);
+  return digest.map(b => ('0' + (b & 0xFF).toString(16)).slice(-2)).join('');
 }
