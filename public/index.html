@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -24,7 +25,7 @@
             background: white;
             border-radius: 20px;
             padding: 40px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
         }
 
         .header {
@@ -92,7 +93,9 @@
             color: #e74c3c;
         }
 
-        input, select, textarea {
+        input,
+        select,
+        textarea {
             width: 100%;
             padding: 12px;
             border: 2px solid #e1e5e9;
@@ -102,7 +105,9 @@
             background: white;
         }
 
-        input:focus, select:focus, textarea:focus {
+        input:focus,
+        select:focus,
+        textarea:focus {
             outline: none;
             border-color: #667eea;
             background: white;
@@ -211,7 +216,7 @@
             margin-bottom: 10px;
             border-radius: 8px;
             border-left: 4px solid #667eea;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .setup-info {
@@ -245,25 +250,26 @@
             .container {
                 padding: 20px;
             }
-            
+
             .form-row {
                 grid-template-columns: 1fr;
             }
-            
+
             .form-group.full-width {
                 grid-column: span 1;
             }
-            
+
             .button-group {
                 flex-direction: column;
             }
-            
+
             h1 {
                 font-size: 2em;
             }
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
@@ -439,8 +445,8 @@
 
     <script>
         // Google Apps ScriptのウェブアプリURL（設定が必要）
-        const GOOGLE_SCRIPT_URL = 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE';
-        
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzh4bSZZNtUN9xiMrbCQu5AeGJV3XNcsytvT-N066xpraoKtIsZfiGfM1pTSsG7qCMQ/exec';
+
         // 送信データを保存する配列
         let submittedData = [];
 
@@ -448,23 +454,23 @@
         document.getElementById('shippingDate').valueAsDate = new Date();
 
         // フォーム送信処理
-        document.getElementById('shippingForm').addEventListener('submit', async function(e) {
+        document.getElementById('shippingForm').addEventListener('submit', async function (e) {
             e.preventDefault();
-            
+
             const formData = new FormData(this);
             const data = {};
-            
+
             // フォームデータを収集
             formData.forEach((value, key) => {
                 data[key] = value;
             });
-            
+
             // タイムスタンプを追加
             data.timestamp = new Date().toLocaleString('ja-JP');
-            
+
             // データを配列に保存
             submittedData.push(data);
-            
+
             try {
                 // Google Sheetsに送信（URLが設定されている場合）
                 if (GOOGLE_SCRIPT_URL !== 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
@@ -476,7 +482,7 @@
                         },
                         body: JSON.stringify(data)
                     });
-                    
+
                     showMessage('✅ 出荷証明書が正常に送信されました！', 'success');
                 } else {
                     showMessage('⚠️ Google Script URLが設定されていません。データはローカルに保存されました。', 'error');
@@ -485,7 +491,7 @@
                 console.error('送信エラー:', error);
                 showMessage('❌ 送信エラーが発生しました。データはローカルに保存されました。', 'error');
             }
-            
+
             // プレビューを更新
             updatePreview();
         });
@@ -495,7 +501,7 @@
             const messageElement = document.getElementById('statusMessage');
             messageElement.textContent = message;
             messageElement.className = `status-message ${type} show`;
-            
+
             setTimeout(() => {
                 messageElement.classList.remove('show');
             }, 5000);
@@ -505,10 +511,10 @@
         function updatePreview() {
             const preview = document.getElementById('dataPreview');
             const content = document.getElementById('previewContent');
-            
+
             if (submittedData.length > 0) {
                 preview.style.display = 'block';
-                
+
                 content.innerHTML = submittedData.map((data, index) => `
                     <div class="data-item">
                         <strong>出荷証明書 #${index + 1}</strong> (${data.timestamp})<br>
@@ -529,7 +535,7 @@
                 showMessage('⚠️ ダウンロードするデータがありません。', 'error');
                 return;
             }
-            
+
             // CSVヘッダー
             const headers = [
                 'タイムスタンプ', '発送者会社名', '発送者担当者', '発送者メール', '発送者電話',
@@ -537,7 +543,7 @@
                 '発送日', '発送方法', '追跡番号', '梱包数',
                 '商品名', '商品コード', '数量', '単位', '重量', '商品価格', '備考'
             ];
-            
+
             // CSVデータを作成
             const csvContent = [
                 headers.join(','),
@@ -550,11 +556,11 @@
                     `"${(data.notes || '').replace(/"/g, '""')}"`
                 ].join(','))
             ].join('\n');
-            
+
             // BOMを追加してUTF-8で保存
             const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
-            
+
             if (link.download !== undefined) {
                 const url = URL.createObjectURL(blob);
                 link.setAttribute('href', url);
@@ -563,7 +569,7 @@
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
-                
+
                 showMessage('💾 出荷証明書CSVファイルがダウンロードされました！', 'success');
             }
         }
@@ -578,7 +584,7 @@
 
         // 入力時のリアルタイムバリデーション
         document.querySelectorAll('input, textarea, select').forEach(element => {
-            element.addEventListener('input', function() {
+            element.addEventListener('input', function () {
                 if (this.checkValidity()) {
                     this.style.borderColor = '#28a745';
                 } else if (this.value) {
@@ -590,4 +596,5 @@
         });
     </script>
 </body>
+
 </html>
