@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>出荷証明書作成依頼書</title>
+    <style>
+        body {
+            font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .form-container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .receipt-number {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        
+        .section-title {
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 15px;
+            color: #333;
+            background-color: #f0f8ff;
+            padding: 8px;
+            border-left: 4px solid #4CAF50;
+        }
+        
+        .form-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .form-label {
+            min-width: 120px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .form-input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            min-width: 200px;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 5px rgba(76, 175, 80, 0.3);
+        }
+        
+        .products-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        
+        .products-table th,
+        .products-table td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+        
+        .products-table th {
+            background-color: #f0f8ff;
+            font-weight: bold;
+        }
+        
+        .products-table input[type="date"],
+        .products-table input[type="text"],
+        .products-table input[type="number"] {
+            width: 100%;
+            border: none;
+            padding: 5px;
+            font-size: 14px;
+        }
+        
+        .add-row-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
+        .add-row-btn:hover {
+            background-color: #45a049;
+        }
+        
+        .checkbox-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .documents-list {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        
+        .destination-info {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .checkbox-item input[type="checkbox"] {
+            margin-right: 10px;
+            transform: scale(1.2);
+        }
+        
+        .star-mark {
+            color: #ff6b6b;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+        
+        .note {
+            font-size: 12px;
+            color: #666;
+            margin-top: 10px;
+            font-style: italic;
+        }
+        
+        .instructions {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        
+        .submit-section {
+            margin-top: 30px;
+            text-align: center;
+        }
+        
+        .submit-btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .submit-btn:hover {
+            background-color: #0056b3;
+        }
+        
+        .print-btn {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        
+        .print-btn:hover {
+            background-color: #545b62;
+        }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <div class="header">
+            <div class="title">出荷証明書作成依頼書</div>
+            <div class="receipt-number">受付番号：<input type="text" id="receiptNumber" style="border:none; border-bottom:1px solid #ccc; background:transparent;" placeholder="自動生成"></div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">【発信元】</div>
+            <div class="form-row">
+                <span class="form-label">御社名：</span>
+                <input type="text" class="form-input" id="companyName" placeholder="会社名を入力してください">
+            </div>
+            <div class="form-row">
+                <span class="form-label">ご担当者名：</span>
+                <input type="text" class="form-input" id="contactPerson" placeholder="担当者名を入力してください">
+                <span style="margin-left: 10px;">様</span>
+            </div>
+            <div class="form-row">
+                <span class="form-label">お電話番号：</span>
+                <input type="text" class="form-input" id="phoneNumber" placeholder="電話番号を入力してください">
+                <span class="form-label" style="margin-left: 20px;">FAX番号：</span>
+                <input type="text" class="form-input" id="faxNumber" placeholder="FAX番号を入力してください">
+            </div>
+            <div class="form-row">
+                <span class="form-label">メールアドレス：</span>
+                <input type="email" class="form-input" id="emailAddress" placeholder="メールアドレスを入力してください">
+            </div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">【基本情報】</div>
+            <div class="form-row">
+                <span class="form-label">宛名：</span>
+                <input type="text" class="form-input" id="addressee" placeholder="宛名を入力してください">
+            </div>
+            <div class="form-row">
+                <span class="form-label">工事名：</span>
+                <input type="text" class="form-input" id="constructionName" placeholder="工事名を入力してください">
+            </div>
+            <div id="contractorsList">
+                <div class="form-row contractor-row">
+                    <input type="text" class="contractor-label" placeholder="業者種別" value="施工業者" style="width: 80px; border: 1px solid #ddd; border-radius: 4px; padding: 5px; background-color: #f9f9f9; margin-right: 5px;">
+                    <span>：</span>
+                    <input type="text" class="form-input" placeholder="業者名を入力してください" style="background-color: white; margin-left: 5px; margin-right: 10px;">
+                    <button type="button" onclick="removeContractorRow(this)" style="background:#dc3545;color:white;border:none;padding:5px 8px;border-radius:3px;cursor:pointer;font-size:12px;">削除</button>
+                </div>
+                <div class="form-row contractor-row">
+                    <input type="text" class="contractor-label" placeholder="業者種別" value="塗装業者" style="width: 80px; border: 1px solid #ddd; border-radius: 4px; padding: 5px; background-color: #f9f9f9; margin-right: 5px;">
+                    <span>：</span>
+                    <input type="text" class="form-input" placeholder="業者名を入力してください" style="background-color: white; margin-left: 5px; margin-right: 10px;">
+                    <button type="button" onclick="removeContractorRow(this)" style="background:#dc3545;color:white;border:none;padding:5px 8px;border-radius:3px;cursor:pointer;font-size:12px;">削除</button>
+                </div>
+                <div class="form-row contractor-row">
+                    <input type="text" class="contractor-label" placeholder="業者種別" value="納品業者" style="width: 80px; border: 1px solid #ddd; border-radius: 4px; padding: 5px; background-color: #f9f9f9; margin-right: 5px;">
+                    <span>：</span>
+                    <input type="text" class="form-input" placeholder="業者名を入力してください" style="background-color: white; margin-left: 5px; margin-right: 10px;">
+                    <button type="button" onclick="removeContractorRow(this)" style="background:#dc3545;color:white;border:none;padding:5px 8px;border-radius:3px;cursor:pointer;font-size:12px;">削除</button>
+                </div>
+            </div>
+            <button type="button" class="add-row-btn" onclick="addContractorRow()" style="font-size: 14px; padding: 6px 12px;">業者行を追加</button>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">【商品情報】</div>
+            <div style="text-align: right; margin-bottom: 10px;">
+                作成日：<input type="date" id="creationDate" style="border: 1px solid #ccc; padding: 5px;" placeholder="作成日（任意）">
+            </div>
+            <table class="products-table" id="productsTable">
+                <thead>
+                    <tr>
+                        <th style="width: 120px;">出荷年月日</th>
+                        <th style="width: 250px;">商品名</th>
+                        <th style="width: 100px;">ロット</th>
+                        <th style="width: 80px;">数量</th>
+                        <th style="width: 60px;">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><input type="date" name="shipmentDate[]"></td>
+                        <td><input type="text" name="productName[]" placeholder="商品名を入力"></td>
+                        <td><input type="text" name="lotNumber[]" placeholder="ロット番号"></td>
+                        <td><input type="number" name="quantity[]" min="0" placeholder="数量"></td>
+                        <td><button type="button" onclick="removeRow(this)" style="background:#dc3545;color:white;border:none;padding:5px;border-radius:3px;cursor:pointer;">削除</button></td>
+                    </tr>
+                    <tr>
+                        <td><input type="date" name="shipmentDate[]"></td>
+                        <td><input type="text" name="productName[]" placeholder="商品名を入力"></td>
+                        <td><input type="text" name="lotNumber[]" placeholder="ロット番号"></td>
+                        <td><input type="number" name="quantity[]" min="0" placeholder="数量"></td>
+                        <td><button type="button" onclick="removeRow(this)" style="background:#dc3545;color:white;border:none;padding:5px;border-radius:3px;cursor:pointer;">削除</button></td>
+                    </tr>
+                    <tr>
+                        <td><input type="date" name="shipmentDate[]"></td>
+                        <td><input type="text" name="productName[]" placeholder="商品名を入力"></td>
+                        <td><input type="text" name="lotNumber[]" placeholder="ロット番号"></td>
+                        <td><input type="number" name="quantity[]" min="0" placeholder="数量"></td>
+                        <td><button type="button" onclick="removeRow(this)" style="background:#dc3545;color:white;border:none;padding:5px;border-radius:3px;cursor:pointer;">削除</button></td>
+                    </tr>
+                </tbody>
+            </table>
+            <button type="button" class="add-row-btn" onclick="addProductRow()">商品行を追加</button>
+        </div>
+        
+        <div class="checkbox-section">
+            <div class="documents-list">
+                <div class="section-title">【必要書類】必要書類にチェックを入れてください</div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="shippingCert" name="documents[]" value="出荷証明書">
+                    <label for="shippingCert">出荷証明書</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="componentSheet" name="documents[]" value="成分表・試験成績書">
+                    <label for="componentSheet">成分表・試験成績書</label>
+                    <span class="star-mark">★</span>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="sds" name="documents[]" value="ＳＤＳ">
+                    <label for="sds">ＳＤＳ</label>
+                    <span class="star-mark">★</span>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="inspection" name="documents[]" value="検査表(ロットが必要です)">
+                    <label for="inspection">検査表(ロットが必要です)</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="catalog" name="documents[]" value="カタログ">
+                    <label for="catalog">カタログ</label>
+                    <span class="star-mark">★</span>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="formaldehyde" name="documents[]" value="ホルムアルデヒド(F☆☆☆☆)証明書">
+                    <label for="formaldehyde">ホルムアルデヒド(F☆☆☆☆)証明書</label>
+                    <span class="star-mark">★</span>
+                </div>
+                <div class="note">★印はホームページからダウンロード可能です</div>
+            </div>
+            
+            <div class="destination-info">
+                <div class="section-title">【送信先】</div>
+                <div style="color: red; font-weight: bold; margin-bottom: 10px;">メールアドレス必須</div>
+                <div class="form-row">
+                    <span class="form-label">会社名：</span>
+                    <input type="text" class="form-input" id="destCompanyName" placeholder="送信先会社名">
+                </div>
+                <div class="form-row">
+                    <span class="form-label">ご担当者名：</span>
+                    <input type="text" class="form-input" id="destContactPerson" placeholder="送信先担当者名">
+                    <span style="margin-left: 10px;">様</span>
+                </div>
+                <div class="form-row">
+                    <span class="form-label">お電話番号：</span>
+                    <input type="text" class="form-input" id="destPhoneNumber" placeholder="送信先電話番号">
+                </div>
+                <div class="form-row">
+                    <span class="form-label">メールアドレス：</span>
+                    <input type="email" class="form-input" id="destEmailAddress" placeholder="送信先メールアドレス" required>
+                </div>
+            </div>
+        </div>
+        
+        <div class="instructions">
+            <p><strong>ご注意：</strong></p>
+            <p>上記入力後、FAXにてご依頼ください。</p>
+            <p>直接のお取引でないお客様は、必ずご購入販売店を通してご依頼下さい。</p>
+        </div>
+        
+        <div class="submit-section">
+            <button type="button" class="submit-btn" onclick="submitForm()">送信</button>
+            <button type="button" class="print-btn" onclick="printForm()">印刷</button>
+        </div>
+    </div>
+    
+    <script>
+        // 商品行を追加する関数
+        function addProductRow() {
+            const table = document.getElementById('productsTable').getElementsByTagName('tbody')[0];
+            const newRow = table.insertRow();
+            newRow.innerHTML = `
+                <td><input type="date" name="shipmentDate[]"></td>
+                <td><input type="text" name="productName[]" placeholder="商品名を入力"></td>
+                <td><input type="text" name="lotNumber[]" placeholder="ロット番号"></td>
+                <td><input type="number" name="quantity[]" min="0" placeholder="数量"></td>
+                <td><button type="button" onclick="removeRow(this)" style="background:#dc3545;color:white;border:none;padding:5px;border-radius:3px;cursor:pointer;">削除</button></td>
+            `;
+        }
+        
+        // 業者行を追加する関数
+        function addContractorRow() {
+            const contractorsList = document.getElementById('contractorsList');
+            const newRow = document.createElement('div');
+            newRow.className = 'form-row contractor-row';
+            newRow.innerHTML = `
+                <input type="text" class="contractor-label" placeholder="業者種別" value="" style="width: 80px; border: 1px solid #ddd; border-radius: 4px; padding: 5px; background-color: #f9f9f9; margin-right: 5px;">
+                <span>：</span>
+                <input type="text" class="form-input" placeholder="業者名を入力してください" style="background-color: white; margin-left: 5px; margin-right: 10px;">
+                <button type="button" onclick="removeContractorRow(this)" style="background:#dc3545;color:white;border:none;padding:5px 8px;border-radius:3px;cursor:pointer;font-size:12px;">削除</button>
+            `;
+            contractorsList.appendChild(newRow);
+        }
+        
+        // 業者行を削除する関数
+        function removeContractorRow(button) {
+            const row = button.parentNode;
+            const contractorsList = document.getElementById('contractorsList');
+            if (contractorsList.children.length > 1) {
+                contractorsList.removeChild(row);
+            } else {
+                alert('最低1行は必要です。');
+            }
+        }
+        
+        // 商品行を削除する関数
+        function removeRow(button) {
+            const row = button.parentNode.parentNode;
+            const table = row.parentNode;
+            if (table.children.length > 1) {
+                table.removeChild(row);
+            } else {
+                alert('最低1行は必要です。');
+            }
+        }
+        
+        // フォーム送信処理
+        function submitForm() {
+            // 必須項目のチェック
+            const requiredFields = [
+                { id: 'companyName', name: '会社名' },
+                { id: 'contactPerson', name: 'ご担当者名' },
+                { id: 'phoneNumber', name: 'お電話番号' },
+                { id: 'emailAddress', name: 'メールアドレス' },
+                { id: 'destEmailAddress', name: '送信先メールアドレス' }
+            ];
+            
+            for (let field of requiredFields) {
+                const element = document.getElementById(field.id);
+                if (!element.value.trim()) {
+                    alert(field.name + 'は必須項目です。');
+                    element.focus();
+                    return;
+                }
+            }
+            
+            // 商品情報のチェック
+            const productRows = document.querySelectorAll('#productsTable tbody tr');
+            let hasProduct = false;
+            for (let row of productRows) {
+                const productName = row.querySelector('input[name="productName[]"]').value;
+                if (productName.trim()) {
+                    hasProduct = true;
+                    break;
+                }
+            }
+            
+            if (!hasProduct) {
+                alert('少なくとも1つの商品情報を入力してください。');
+                return;
+            }
+            
+            // 必要書類のチェック
+            const documents = document.querySelectorAll('input[name="documents[]"]:checked');
+            if (documents.length === 0) {
+                alert('必要書類を少なくとも1つ選択してください。');
+                return;
+            }
+            
+            alert('フォームの内容が正常です。実際の送信処理は実装してください。');
+        }
+        
+        // 印刷処理
+        function printForm() {
+            window.print();
+        }
+        
+        // 受付番号の自動生成
+        function generateReceiptNumber() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            
+            const receiptNumber = `${year}${month}${day}-${hours}${minutes}-${seconds}`;
+            document.getElementById('receiptNumber').value = receiptNumber;
+        }
+        
+        // ページ読み込み時の初期化
+        window.onload = function() {
+            generateReceiptNumber();
+            // 作成日は空欄のままにする
+        };
+    </script>
+</body>
+</html>
