@@ -1,8 +1,8 @@
 # Google Apps Script統合ガイド
 
 ## 🔗 URL更新完了
-- **新しいWebアプリURL**: `https://script.google.com/macros/s/AKfycbyz9LBPf7CpZsNHygIN-lCw9MrJsqDcsjkA_7x-2TxojzpjXiKsJlDYd0ZSpzGtU5v75Q/exec`
-- **index.html**: 更新済み ✅
+- **最新WebアプリURL**: `https://script.google.com/macros/s/AKfycbwzKN2ZeLMYEhzNlPy1ZWRIIG7W95qHDjPUV8Ev8RxnKPY9HkfbuDId2hFaduZv3_y5/exec`
+- **index.html**: 最新URL更新済み ✅
 
 ## 📋 Google Apps Script統合手順
 
