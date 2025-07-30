@@ -44,7 +44,7 @@ function doPost(e) {
         row[22 + i * 4] = data.products[i].productName || '';  // 商品名
         row[23 + i * 4] = data.products[i].quantity || '';    // 数量
         row[24 + i * 4] = data.products[i].lotNumber || '';   // ロットNo.
-        row[25 + i * 4] = data.products[i].shippingDate || ''; // 出荷年月日
+        row[25 + i * 4] = data.products[i].shipmentDate || ''; // 出荷年月日
       } else {
         row[22 + i * 4] = '';  // 商品名
         row[23 + i * 4] = '';  // 数量
@@ -56,10 +56,10 @@ function doPost(e) {
     // 必要書類（AY-BC列）
     const docTypes = [
       '成分表・試験成績書',  // AY列
-      'SDS',                 // AZ列
-      '検査表',              // BA列
+      'ＳＤＳ',                 // AZ列
+      '検査表(ロットが必要です)',              // BA列
       'カタログ',            // BB列
-      'ホルムアルデヒド証明書' // BC列
+      'ﾎﾙﾑｱﾙﾃﾞﾋﾄﾞ(F☆☆☆☆)証明書' // BC列
     ];
     
     for (let i = 0; i < docTypes.length; i++) {
