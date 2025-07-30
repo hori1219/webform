@@ -97,10 +97,24 @@ function doPost(e) {
     // シートにデータを追加
     sheet.appendRow(row);
     
+    // 依頼書PDF生成とメール送信
+    try {
+      const pdfResult = generateRequestPDF(data, managementNumber);
+      const emailResult = sendRequestEmail(data, pdfResult.pdfBlob, managementNumber);
+      
+      // PDFリンクをスプレッドシートに更新
+      const lastRow = sheet.getLastRow();
+      sheet.getRange(lastRow, 62).setValue(pdfResult.pdfUrl); // BK列: 依頼書PDFリンク
+      
+    } catch (pdfError) {
+      console.error('PDF生成・メール送信エラー:', pdfError);
+      // PDF生成エラーでもデータ保存は成功とする
+    }
+    
     return ContentService
       .createTextOutput(JSON.stringify({
         status: 'success',
-        message: 'データが正常に保存されました',
+        message: 'データが正常に保存され、依頼書PDFが送信されました',
         managementNumber: managementNumber
       }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -164,6 +178,158 @@ function generateManagementNumber(sheet) {
   } finally {
     // 必ずロックを解放
     lock.releaseLock();
+  }
+}
+
+// 依頼書PDF生成機能
+function generateRequestPDF(data, managementNumber) {
+  try {
+    // テンプレートドキュメントID（作成後に設定）
+    const templateDocId = 'YOUR_TEMPLATE_DOC_ID'; // 後で実際のIDに変更
+    
+    // 保存先フォルダID
+    const folderId = '1RJpSMtCHBUKqRL4kTisqEVs5YFLzlsk-';
+    
+    // テンプレートを複製
+    const templateDoc = DriveApp.getFileById(templateDocId);
+    const folder = DriveApp.getFolderById(folderId);
+    const fileName = `依頼書_${managementNumber}_${data.companyName}`;
+    const copiedDoc = templateDoc.makeCopy(fileName, folder);
+    
+    // 複製した文書を開く
+    const doc = DocumentApp.openById(copiedDoc.getId());
+    const body = doc.getBody();
+    
+    // プレースホルダーを実際の値に置換
+    const replacements = {
+      '{{受付番号}}': managementNumber,
+      '{{依頼日}}': data.timestamp || new Date().toLocaleString('ja-JP'),
+      '{{会社名}}': data.companyName || '',
+      '{{担当者名}}': data.contactPerson || '',
+      '{{電話番号}}': data.phoneNumber || '',
+      '{{FAX番号}}': '', // 固定値または空
+      '{{メールアドレス}}': data.emailAddress || '',
+      '{{宛名}}': data.addressee || '',
+      '{{敬称}}': data.honorific || '',
+      '{{工事名}}': data.constructionName || '',
+      '{{工事住所}}': data.constructionAddress || '',
+      '{{作成日}}': data.creationDate || '',
+      '{{送信先会社名}}': data.destCompanyName || '',
+      '{{送信先担当者名}}': data.destContactPerson || '',
+      '{{送信先電話番号}}': data.destPhoneNumber || '',
+      '{{送信先メールアドレス}}': data.destEmailAddress || '',
+      '{{備考}}': data.remarks || ''
+    };
+    
+    // 基本的な置換を実行
+    Object.keys(replacements).forEach(placeholder => {
+      body.replaceText(placeholder, replacements[placeholder]);
+    });
+    
+    // 業者情報の置換（最大4社）
+    for (let i = 1; i <= 4; i++) {
+      const contractor = data.contractors && data.contractors[i-1];
+      body.replaceText(`{{業者分類${i}}}`, contractor ? contractor.type : '');
+      body.replaceText(`{{業者名${i}}}`, contractor ? contractor.name : '');
+    }
+    
+    // 必要書類のチェックマークを設定
+    const docChecks = {
+      '{{成分表試験成績書}}': data.documents && data.documents.includes('成分表・試験成績書') ? '✓' : '',
+      '{{SDS}}': data.documents && data.documents.includes('ＳＤＳ') ? '✓' : '',
+      '{{検査表}}': data.documents && data.documents.includes('検査表(ロットが必要です)') ? '✓' : '',
+      '{{カタログ}}': data.documents && data.documents.includes('カタログ') ? '✓' : '',
+      '{{ホルムアルデヒド証明書}}': data.documents && data.documents.includes('ﾎﾙﾑｱﾙﾃﾞﾋﾄﾞ(F☆☆☆☆)証明書') ? '✓' : ''
+    };
+    
+    Object.keys(docChecks).forEach(placeholder => {
+      body.replaceText(placeholder, docChecks[placeholder]);
+    });
+    
+    // 商品テーブルの生成（簡単な文字列として挿入）
+    let productTable = '';
+    if (data.products && data.products.length > 0) {
+      data.products.forEach(product => {
+        productTable += `${product.shipmentDate || ''} | ${product.productName || ''} | ${product.quantity || ''} | ${product.lotNumber || ''}\n`;
+      });
+    }
+    body.replaceText('{{商品テーブル}}', productTable);
+    
+    // 文書を保存
+    doc.saveAndClose();
+    
+    // PDFとして出力
+    const pdfBlob = DriveApp.getFileById(copiedDoc.getId()).getAs('application/pdf');
+    pdfBlob.setName(`${fileName}.pdf`);
+    
+    // PDFをフォルダに保存
+    const pdfFile = folder.createFile(pdfBlob);
+    
+    // 元のGoogle Doc文書は削除（PDFのみ保持）
+    DriveApp.getFileById(copiedDoc.getId()).setTrashed(true);
+    
+    return {
+      pdfBlob: pdfBlob,
+      pdfUrl: pdfFile.getUrl(),
+      pdfId: pdfFile.getId()
+    };
+    
+  } catch (error) {
+    console.error('PDF生成エラー:', error);
+    throw error;
+  }
+}
+
+// メール送信機能
+function sendRequestEmail(data, pdfBlob, managementNumber) {
+  try {
+    const subject = `【依頼書送付】出荷証明書作成依頼書_${managementNumber}`;
+    
+    const emailBody = `
+${data.addressee} ${data.honorific}
+
+いつもお世話になっております。
+
+出荷証明書作成依頼書をお送りいたします。
+
+■ 管理番号：${managementNumber}
+■ 工事名：${data.constructionName}
+■ 申請者：${data.companyName} ${data.contactPerson}様
+
+添付の依頼書をご確認の上、出荷証明書の作成をお願いいたします。
+
+ご質問等ございましたら、下記までご連絡ください。
+
+---
+${data.companyName}
+${data.contactPerson}
+TEL: ${data.phoneNumber}
+Email: ${data.emailAddress}
+---
+
+※このメールは自動送信されています。
+`;
+
+    // メール送信
+    GmailApp.sendEmail(
+      data.destEmailAddress,
+      subject,
+      emailBody,
+      {
+        attachments: [pdfBlob],
+        name: data.companyName // 送信者名
+      }
+    );
+    
+    return {
+      status: 'success',
+      sentTo: data.destEmailAddress,
+      sentAt: new Date().toLocaleString('ja-JP')
+    };
+    
+  } catch (error) {
+    console.error('メール送信エラー:', error);
+    throw error;
   }
 }
 
