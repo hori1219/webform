@@ -392,15 +392,26 @@ function createDocumentTemplate() {
     setupProductTableStyle(productTable);
     
     // === 必要書類 ===
-    const documentsSection = body.appendParagraph('【必要書類】');
+    const documentsSection = body.appendParagraph('【必要書類】必要書類にチェックを入れてください');
     documentsSection.editAsText().setFontSize(10).setBold(true);
     documentsSection.setSpacingAfter(0);
     documentsSection.setSpacingBefore(1);
     
-    const documentsInfo = body.appendParagraph('{{書類1}}成分表・試験成績書　{{書類2}}ＳＤＳ　{{書類3}}検査表　{{書類4}}カタログ　{{書類5}}ﾎﾙﾑｱﾙﾃﾞﾋﾄﾞ証明書');
-    documentsInfo.editAsText().setFontSize(9);
-    documentsInfo.setSpacingAfter(1);
-    documentsInfo.setSpacingBefore(0);
+    // 各書類を個別の行として追加
+    const docItems = [
+      '□ {{成分表試験成績書}} 成分表・試験成績書',
+      '□ {{SDS}} ＳＤＳ',
+      '□ {{検査表}} 検査表(ロットが必要です)',
+      '□ {{カタログ}} カタログ',
+      '□ {{ホルムアルデヒド証明書}} ﾎﾙﾑｱﾙﾃﾞﾋﾄﾞ(F☆☆☆☆)証明書'
+    ];
+    
+    docItems.forEach(item => {
+      const docLine = body.appendParagraph(item);
+      docLine.editAsText().setFontSize(9);
+      docLine.setSpacingAfter(0);
+      docLine.setSpacingBefore(0);
+    });
     
     // === 送信先 ===
     const destSection = body.appendParagraph('【送信先】');
@@ -476,7 +487,7 @@ function fillDocumentData(doc, data, managementNumber) {
     // 基本情報の置換
     const replacements = {
       '{{受付番号}}': managementNumber,
-      '{{依頼日}}': data.timestamp || new Date().toLocaleString('ja-JP'),
+      '{{依頼日}}': data.timestamp ? data.timestamp.split(' ')[0] : new Date().toLocaleDateString('ja-JP'),
       '{{会社名}}': data.companyName || '',
       '{{担当者名}}': data.contactPerson || '',
       '{{電話番号}}': data.phoneNumber || '',
@@ -501,12 +512,20 @@ function fillDocumentData(doc, data, managementNumber) {
     // 業者情報の置換（最大4社）
     for (let i = 1; i <= 4; i++) {
       const contractor = data.contractors && data.contractors[i-1];
-      body.replaceText(`{{業者分類${i}}}`, contractor ? contractor.type : '');
-      body.replaceText(`{{業者名${i}}}`, contractor ? contractor.name : '');
+      if (contractor && contractor.type && contractor.name) {
+        // 分類と名前の両方がある場合
+        body.replaceText(`{{業者分類${i}}}：{{業者名${i}}}`, `${contractor.type}：${contractor.name}`);
+      } else if (contractor && contractor.name) {
+        // 名前のみの場合（分類が空欄）
+        body.replaceText(`{{業者分類${i}}}：{{業者名${i}}}`, contractor.name);
+      } else {
+        // 何もない場合は空文字列に
+        body.replaceText(`{{業者分類${i}}}：{{業者名${i}}}`, '');
+      }
     }
     
-    // 商品情報の置換（3商品のみ）
-    for (let i = 1; i <= 3; i++) {
+    // 商品情報の置換（7商品まで）
+    for (let i = 1; i <= 7; i++) {
       const product = data.products && data.products[i-1];
       if (product) {
         body.replaceText(`{{商品${i}_出荷日}}`, product.shipmentDate || '');
@@ -523,20 +542,20 @@ function fillDocumentData(doc, data, managementNumber) {
     }
     
     // 必要書類のチェックマーク設定
-    const docTypes = [
-      '成分表・試験成績書',
-      'ＳＤＳ',
-      '検査表(ロットが必要です)',
-      'カタログ',
-      'ﾎﾙﾑｱﾙﾃﾞﾋﾄﾞ(F☆☆☆☆)証明書'
-    ];
+    const docMappings = {
+      '{{成分表試験成績書}}': '成分表・試験成績書',
+      '{{SDS}}': 'ＳＤＳ',
+      '{{検査表}}': '検査表(ロットが必要です)',
+      '{{カタログ}}': 'カタログ',
+      '{{ホルムアルデヒド証明書}}': 'ﾎﾙﾑｱﾙﾃﾞﾋﾄﾞ(F☆☆☆☆)証明書'
+    };
     
-    for (let i = 1; i <= 5; i++) {
-      const docType = docTypes[i-1];
+    Object.keys(docMappings).forEach(placeholder => {
+      const docType = docMappings[placeholder];
       const isChecked = data.documents && data.documents.includes(docType);
       const checkMark = isChecked ? '☑' : '□';
-      body.replaceText(`{{書類${i}}}`, checkMark);
-    }
+      body.replaceText(placeholder, checkMark);
+    });
     
     console.log('文書データ差し込み完了');
     
