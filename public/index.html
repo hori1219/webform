@@ -449,7 +449,7 @@
 
     <script>
         // Google Apps ScriptのウェブアプリURL
-        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwzKN2ZeLMYEhzNlPy1ZWRIIG7W95qHDjPUV8Ev8RxnKPY9HkfbuDId2hFaduZv3_y5/exec';
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw6NcVtH5CWflOGGJYbIO5H07wwLHMVheRUVgGGyTd1QmGmpWmbDrkEnnneqkZDIFtB6g/exec';
 
         // 商品行を追加する関数
         function addProductRow() {
@@ -579,14 +579,21 @@
                 // Google Sheetsに送信
                 const response = await fetch(GOOGLE_SCRIPT_URL, {
                     method: 'POST',
-                    mode: 'no-cors',
                     headers: {
-                        'Content-Type': 'application/json',
+                        'Content-Type': 'text/plain',
                     },
                     body: JSON.stringify(formData)
                 });
 
-                showMessage('✅ 出荷証明書作成依頼が正常に送信されました！', 'success');
+                // レスポンスを確認
+                const result = await response.text();
+                console.log('サーバーレスポンス:', result);
+                
+                if (response.ok) {
+                    showMessage('✅ 出荷証明書作成依頼が正常に送信されました！', 'success');
+                } else {
+                    throw new Error('送信に失敗しました');
+                }
                 
                 // フォームをリセット
                 this.reset();

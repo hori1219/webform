@@ -1,0 +1,1455 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>出荷証明書作成依頼書</title>
+    <style>
+        body {
+            font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            line-height: 1.6;
+        }
+        
+        .form-container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .title {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-align: center;
+            color: #333;
+        }
+        
+        .receipt-number {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        
+        .section-title {
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #333;
+            background-color: #f0f8ff;
+            padding: 10px;
+            border-left: 4px solid #4CAF50;
+            margin: -10px -10px 15px -10px;
+        }
+        
+        .form-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .form-row-inline {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .form-group {
+            display: flex;
+            align-items: center;
+            flex: 1;
+            min-width: 250px;
+        }
+        
+        .form-label {
+            min-width: 120px;
+            font-weight: bold;
+            margin-right: 10px;
+            color: #333;
+        }
+        
+        .form-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            min-width: 150px;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 5px rgba(76, 175, 80, 0.3);
+        }
+        
+        .required {
+            color: red;
+            font-weight: bold;
+        }
+        
+        /* 敬称セレクト用スタイル */
+        .honorific-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .honorific-select {
+            padding: 8px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .honorific-other {
+            padding: 8px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            width: 120px;
+            display: none;
+        }
+        
+        /* 業者セクション用スタイル */
+        .contractor-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 12px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .contractor-type {
+            width: 100px;
+            margin-right: 10px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f5f5f5;
+            font-size: 14px;
+        }
+        
+        .contractor-name {
+            flex: 1;
+            margin-left: 10px;
+            margin-right: 10px;
+        }
+        
+        .remove-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .remove-btn:hover {
+            background: #c82333;
+        }
+        
+        .add-btn {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        
+        .add-btn:hover {
+            background-color: #218838;
+        }
+        
+        .add-btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .note {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+            font-style: italic;
+        }
+        
+        /* 商品テーブル用スタイル */
+        .products-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        
+        .products-table th,
+        .products-table td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+        
+        .products-table th {
+            background-color: #f0f8ff;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .products-table select,
+        .products-table input {
+            width: 100%;
+            border: none;
+            padding: 5px;
+            font-size: 14px;
+            background: transparent;
+        }
+        
+        .products-table select:focus,
+        .products-table input:focus {
+            outline: 1px solid #4CAF50;
+            background-color: #f8fff8;
+        }
+        
+        /* チェックボックスセクション */
+        .checkbox-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .documents-list,
+        .destination-info {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .checkbox-item input[type="checkbox"] {
+            margin-right: 10px;
+            transform: scale(1.1);
+        }
+        
+        .checkbox-item label {
+            font-size: 14px;
+        }
+        
+        /* 送信ボタン */
+        .submit-section {
+            margin-top: 30px;
+            text-align: center;
+        }
+        
+        .submit-btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 18px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        
+        .submit-btn:hover {
+            background-color: #0056b3;
+        }
+        
+        .submit-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .print-btn {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 18px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .print-btn:hover {
+            background-color: #545b62;
+        }
+        
+        /* ステータスメッセージ */
+        .status-message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: 600;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s ease;
+        }
+        
+        .status-message.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        /* モーダルスタイル */
+        .modal {
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal-content {
+            background-color: white;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 90%;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            border-bottom: 1px solid #e2e8f0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px 8px 0 0;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+            font-size: 20px;
+        }
+        
+        .close-modal {
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            color: white;
+            opacity: 0.8;
+        }
+        
+        .close-modal:hover {
+            opacity: 1;
+        }
+        
+        .modal-body {
+            padding: 20px;
+        }
+        
+        .modal-footer {
+            padding: 15px 20px;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        
+        /* 確認画面専用スタイル */
+        .confirm-section {
+            margin-bottom: 20px;
+            border: 1px solid #e1e5e9;
+            border-radius: 6px;
+            padding: 15px;
+        }
+        
+        .confirm-section h3 {
+            margin: 0 0 10px 0;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #667eea;
+            color: #2d3748;
+            font-size: 16px;
+        }
+        
+        .confirm-row {
+            display: flex;
+            margin-bottom: 8px;
+            align-items: flex-start;
+        }
+        
+        .confirm-label {
+            min-width: 120px;
+            font-weight: 600;
+            color: #4a5568;
+            flex-shrink: 0;
+        }
+        
+        .confirm-value {
+            color: #2d3748;
+            flex: 1;
+        }
+        
+        .confirm-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        
+        .confirm-table th,
+        .confirm-table td {
+            border: 1px solid #e2e8f0;
+            padding: 8px;
+            text-align: left;
+            font-size: 14px;
+        }
+        
+        .confirm-table th {
+            background-color: #f7fafc;
+            font-weight: 600;
+        }
+        
+        /* レスポンシブデザイン */
+        @media (max-width: 768px) {
+            .form-container {
+                padding: 20px;
+                margin: 10px;
+            }
+            
+            .checkbox-section {
+                grid-template-columns: 1fr;
+            }
+            
+            .form-row-inline {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+            }
+            
+            .form-group {
+                min-width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <div class="title">出荷証明書作成依頼書</div>
+        <div class="receipt-number">
+            管理番号：<input type="text" id="managementNumber" style="border:none; border-bottom:1px solid #ccc; background:transparent; font-weight:bold;" placeholder="送信後に生成" readonly>
+        </div>
+        
+        <form id="certificateForm">
+            <!-- 発信元セクション -->
+            <div class="section">
+                <div class="section-title">【発信元】</div>
+                <div class="form-row">
+                    <span class="form-label">御社名：<span class="required">*</span></span>
+                    <input type="text" class="form-input" id="companyName" name="companyName" placeholder="会社名を入力してください" required>
+                </div>
+                <div class="form-row-inline">
+                    <div class="form-group">
+                        <span class="form-label">ご担当者名：<span class="required">*</span></span>
+                        <input type="text" class="form-input" id="contactPerson" name="contactPerson" placeholder="担当者名" required>
+                        <span style="margin-left: 5px;">様</span>
+                    </div>
+                    <div class="form-group">
+                        <span class="form-label">お電話番号：<span class="required">*</span></span>
+                        <input type="text" class="form-input" id="phoneNumber" name="phoneNumber" placeholder="電話番号" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <span class="form-label">メールアドレス：<span class="required">*</span></span>
+                    <input type="email" class="form-input" id="emailAddress" name="emailAddress" placeholder="メールアドレスを入力してください" required>
+                </div>
+            </div>
+            
+            <!-- 基本情報セクション -->
+            <div class="section">
+                <div class="section-title">【基本情報】</div>
+                <div class="form-row">
+                    <span class="form-label">宛名：<span class="required">*</span></span>
+                    <input type="text" class="form-input" id="addressee" name="addressee" placeholder="宛名を入力してください" required style="flex: 0 0 300px; margin-right: 10px;">
+                    <div class="honorific-container">
+                        <select class="honorific-select" id="honorific" name="honorific" onchange="toggleHonorificOther()">
+                            <option value="様">様</option>
+                            <option value="御中">御中</option>
+                            <option value="殿">殿</option>
+                            <option value="other">その他</option>
+                        </select>
+                        <input type="text" class="honorific-other" id="honorificOther" placeholder="入力してください">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <span class="form-label">工事名：<span class="required">*</span></span>
+                    <input type="text" class="form-input" id="constructionName" name="constructionName" placeholder="工事名を入力してください" required>
+                </div>
+                <div class="form-row">
+                    <span class="form-label">工事住所：</span>
+                    <input type="text" class="form-input" id="constructionAddress" name="constructionAddress" placeholder="工事住所を入力してください">
+                </div>
+                <div class="form-row">
+                    <span class="form-label">書類作成日：</span>
+                    <input type="date" class="form-input" id="creationDate" name="creationDate" style="flex: 0 0 200px;">
+                    <span class="note" style="margin-left: 10px;">（不要な場合は空欄のままにしてください）</span>
+                </div>
+            </div>
+            
+            <!-- 業者情報セクション -->
+            <div class="section">
+                <div class="section-title">【業者情報】</div>
+                <div id="contractorsList">
+                    <div class="contractor-row">
+                        <input type="text" class="contractor-type" value="施工業者" placeholder="業者種別">
+                        <span>：</span>
+                        <input type="text" class="form-input contractor-name" placeholder="業者名を入力してください">
+                        <button type="button" class="remove-btn" onclick="removeContractor(this)">削除</button>
+                    </div>
+                    <div class="contractor-row">
+                        <input type="text" class="contractor-type" value="塗装業者" placeholder="業者種別">
+                        <span>：</span>
+                        <input type="text" class="form-input contractor-name" placeholder="業者名を入力してください">
+                        <button type="button" class="remove-btn" onclick="removeContractor(this)">削除</button>
+                    </div>
+                    <div class="contractor-row">
+                        <input type="text" class="contractor-type" value="納品業者" placeholder="業者種別">
+                        <span>：</span>
+                        <input type="text" class="form-input contractor-name" placeholder="業者名を入力してください">
+                        <button type="button" class="remove-btn" onclick="removeContractor(this)">削除</button>
+                    </div>
+                </div>
+                <button type="button" class="add-btn" id="addContractorBtn" onclick="addContractor()">業者を追加</button>
+                <div class="note">※業者分類は自由に書き換えることができます（最大4者まで）</div>
+            </div>
+            
+            <!-- 商品情報セクション -->
+            <div class="section">
+                <div class="section-title">【商品情報】</div>
+                <table class="products-table" id="productsTable">
+                    <thead>
+                        <tr>
+                            <th>出荷年月日</th>
+                            <th>商品名<span class="required">*</span></th>
+                            <th>ロット番号</th>
+                            <th>数量<span class="required">*</span></th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><input type="date" name="shipmentDate[]"></td>
+                            <td>
+                                <select name="productName[]" required onchange="handleProductSelect(this)">
+                                    <option value="">商品を選択してください</option>
+                                    <option value="ローバル１ｋｇ">ローバル１ｋｇ</option>
+                                    <option value="ローバル５ｋｇ">ローバル５ｋｇ</option>
+                                    <option value="ローバルスプレー３００ｍｌ">ローバルスプレー３００ｍｌ</option>
+                                    <option value="ローバル２５ｋｇ">ローバル２５ｋｇ</option>
+                                    <option value="厚膜ローバルスプレー４２０ｍｌ">厚膜ローバルスプレー４２０ｍｌ</option>
+                                    <option value="厚膜ローバル２５ｋｇ">厚膜ローバル２５ｋｇ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="ローバルシンナー１Ｌ">ローバルシンナー１Ｌ</option>
+                                    <option value="ローバルシンナー３Ｌ">ローバルシンナー３Ｌ</option>
+                                    <option value="ローバルシンナー１４ｋｇ">ローバルシンナー１４ｋｇ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="ローバルシルバー０.７ｋｇ">ローバルシルバー０.７ｋｇ</option>
+                                    <option value="ローバルシルバー３.５ｋｇ">ローバルシルバー３.５ｋｇ</option>
+                                    <option value="ローバルシルバースプレー４２０ｍｌ">ローバルシルバースプレー４２０ｍｌ</option>
+                                    <option value="ローバルシルバー２０ｋｇ">ローバルシルバー２０ｋｇ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="エポローバル１ｋｇ">エポローバル１ｋｇ</option>
+                                    <option value="エポローバル５ｋｇ">エポローバル５ｋｇ</option>
+                                    <option value="エポローバル２５ｋｇ">エポローバル２５ｋｇ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="エポローバルシンナー１Ｌ">エポローバルシンナー１Ｌ</option>
+                                    <option value="エポローバルシンナー３Ｌ">エポローバルシンナー３Ｌ</option>
+                                    <option value="エポローバルシンナー１４ｋｇ">エポローバルシンナー１４ｋｇ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="ローバルアルファ０.７ｋｇ">ローバルアルファ０.７ｋｇ</option>
+                                    <option value="ローバルアルファ３.５ｋｇ">ローバルアルファ３.５ｋｇ</option>
+                                    <option value="ローバルアルファスプレー４２０ｍｌ">ローバルアルファスプレー４２０ｍｌ</option>
+                                    <option value="ローバルアルファ２０ｋｇ">ローバルアルファ２０ｋｇ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="メッキカバースプレー４２０ｍｌ">メッキカバースプレー４２０ｍｌ</option>
+                                    <option value="ニュージンクカバースプレー４２０ｍｌ">ニュージンクカバースプレー４２０ｍｌ</option>
+                                    <option value="マットカバースプレー４２０ｍｌ">マットカバースプレー４２０ｍｌ</option>
+                                    <option value="マットカバー１８ｋｇ">マットカバー１８ｋｇ</option>
+                                    <option value="クロムもドキッスプレー３３０ｍｌ">クロムもドキッスプレー３３０ｍｌ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="水性ローバル０.９ｋｇセット">水性ローバル０.９ｋｇセット</option>
+                                    <option value="水性ローバル４.５ｋｇセット">水性ローバル４.５ｋｇセット</option>
+                                    <option value="水性ローバル１８ｋｇセット">水性ローバル１８ｋｇセット</option>
+                                    <option disabled>──────────</option>
+                                    <option value="低臭クリーナー３Ｌ">低臭クリーナー３Ｌ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="ローバル エコタイプ１ｋｇ">ローバル エコタイプ１ｋｇ</option>
+                                    <option value="ローバル エコタイプ５ｋｇ">ローバル エコタイプ５ｋｇ</option>
+                                    <option value="ローバルスプレー エコタイプ４２０ｍｌ">ローバルスプレー エコタイプ４２０ｍｌ</option>
+                                    <option value="ローバル エコタイプ２５ｋｇ">ローバル エコタイプ２５ｋｇ</option>
+                                    <option value="ローバル エコタイプ９０ｍｌ">ローバル エコタイプ９０ｍｌ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="エコシリーズシンナー１Ｌ">エコシリーズシンナー１Ｌ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="ローバルシルバー エコタイプ０.７ｋｇ">ローバルシルバー エコタイプ０.７ｋｇ</option>
+                                    <option value="ローバルシルバー エコタイプ３.５ｋｇ">ローバルシルバー エコタイプ３.５ｋｇ</option>
+                                    <option value="ローバルシルバースプレー エコタイプ４２０ｍｌ">ローバルシルバースプレー エコタイプ４２０ｍｌ</option>
+                                    <option value="ローバルシルバー エコタイプ２０ｋｇ">ローバルシルバー エコタイプ２０ｋｇ</option>
+                                    <option value="ローバルシルバー エコタイプ９０ｍｌ">ローバルシルバー エコタイプ９０ｍｌ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="ＡＬＭＺ０.７ｋｇ">ＡＬＭＺ０.７ｋｇ</option>
+                                    <option value="ＡＬＭＺ３.５ｋｇ">ＡＬＭＺ３.５ｋｇ</option>
+                                    <option value="ＡＬＭＺスプレー４２０ｍｌ">ＡＬＭＺスプレー４２０ｍｌ</option>
+                                    <option value="ＡＬＭＺ２０ｋｇ">ＡＬＭＺ２０ｋｇ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="塗る亜鉛テクスチャー６㎏セット">塗る亜鉛テクスチャー６㎏セット</option>
+                                </select>
+                            </td>
+                            <td><input type="text" name="lotNumber[]" placeholder="ロット番号"></td>
+                            <td><input type="number" name="quantity[]" placeholder="数量" required></td>
+                            <td><button type="button" class="remove-btn" onclick="removeProduct(this)">削除</button></td>
+                        </tr>
+                        <tr>
+                            <td><input type="date" name="shipmentDate[]"></td>
+                            <td>
+                                <select name="productName[]" onchange="handleProductSelect(this)">
+                                    <option value="">商品を選択してください</option>
+                                    <option value="ローバル１ｋｇ">ローバル１ｋｇ</option>
+                                    <option value="ローバル５ｋｇ">ローバル５ｋｇ</option>
+                                    <option value="ローバルスプレー３００ｍｌ">ローバルスプレー３００ｍｌ</option>
+                                    <option value="ローバル２５ｋｇ">ローバル２５ｋｇ</option>
+                                    <option value="厚膜ローバルスプレー４２０ｍｌ">厚膜ローバルスプレー４２０ｍｌ</option>
+                                    <option value="厚膜ローバル２５ｋｇ">厚膜ローバル２５ｋｇ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="ローバルシンナー１Ｌ">ローバルシンナー１Ｌ</option>
+                                    <option value="ローバルシンナー３Ｌ">ローバルシンナー３Ｌ</option>
+                                    <option value="ローバルシンナー１４ｋｇ">ローバルシンナー１４ｋｇ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="ローバルシルバー０.７ｋｇ">ローバルシルバー０.７ｋｇ</option>
+                                    <option value="ローバルシルバー３.５ｋｇ">ローバルシルバー３.５ｋｇ</option>
+                                    <option value="ローバルシルバースプレー４２０ｍｌ">ローバルシルバースプレー４２０ｍｌ</option>
+                                    <option value="ローバルシルバー２０ｋｇ">ローバルシルバー２０ｋｇ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="エポローバル１ｋｇ">エポローバル１ｋｇ</option>
+                                    <option value="エポローバル５ｋｇ">エポローバル５ｋｇ</option>
+                                    <option value="エポローバル２５ｋｇ">エポローバル２５ｋｇ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="エポローバルシンナー１Ｌ">エポローバルシンナー１Ｌ</option>
+                                    <option value="エポローバルシンナー３Ｌ">エポローバルシンナー３Ｌ</option>
+                                    <option value="エポローバルシンナー１４ｋｇ">エポローバルシンナー１４ｋｇ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="ローバルアルファ０.７ｋｇ">ローバルアルファ０.７ｋｇ</option>
+                                    <option value="ローバルアルファ３.５ｋｇ">ローバルアルファ３.５ｋｇ</option>
+                                    <option value="ローバルアルファスプレー４２０ｍｌ">ローバルアルファスプレー４２０ｍｌ</option>
+                                    <option value="ローバルアルファ２０ｋｇ">ローバルアルファ２０ｋｇ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="メッキカバースプレー４２０ｍｌ">メッキカバースプレー４２０ｍｌ</option>
+                                    <option value="ニュージンクカバースプレー４２０ｍｌ">ニュージンクカバースプレー４２０ｍｌ</option>
+                                    <option value="マットカバースプレー４２０ｍｌ">マットカバースプレー４２０ｍｌ</option>
+                                    <option value="マットカバー１８ｋｇ">マットカバー１８ｋｇ</option>
+                                    <option value="クロムもドキッスプレー３３０ｍｌ">クロムもドキッスプレー３３０ｍｌ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="水性ローバル０.９ｋｇセット">水性ローバル０.９ｋｇセット</option>
+                                    <option value="水性ローバル４.５ｋｇセット">水性ローバル４.５ｋｇセット</option>
+                                    <option value="水性ローバル１８ｋｇセット">水性ローバル１８ｋｇセット</option>
+                                    <option disabled>──────────</option>
+                                    <option value="低臭クリーナー３Ｌ">低臭クリーナー３Ｌ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="ローバル エコタイプ１ｋｇ">ローバル エコタイプ１ｋｇ</option>
+                                    <option value="ローバル エコタイプ５ｋｇ">ローバル エコタイプ５ｋｇ</option>
+                                    <option value="ローバルスプレー エコタイプ４２０ｍｌ">ローバルスプレー エコタイプ４２０ｍｌ</option>
+                                    <option value="ローバル エコタイプ２５ｋｇ">ローバル エコタイプ２５ｋｇ</option>
+                                    <option value="ローバル エコタイプ９０ｍｌ">ローバル エコタイプ９０ｍｌ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="エコシリーズシンナー１Ｌ">エコシリーズシンナー１Ｌ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="ローバルシルバー エコタイプ０.７ｋｇ">ローバルシルバー エコタイプ０.７ｋｇ</option>
+                                    <option value="ローバルシルバー エコタイプ３.５ｋｇ">ローバルシルバー エコタイプ３.５ｋｇ</option>
+                                    <option value="ローバルシルバースプレー エコタイプ４２０ｍｌ">ローバルシルバースプレー エコタイプ４２０ｍｌ</option>
+                                    <option value="ローバルシルバー エコタイプ２０ｋｇ">ローバルシルバー エコタイプ２０ｋｇ</option>
+                                    <option value="ローバルシルバー エコタイプ９０ｍｌ">ローバルシルバー エコタイプ９０ｍｌ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="ＡＬＭＺ０.７ｋｇ">ＡＬＭＺ０.７ｋｇ</option>
+                                    <option value="ＡＬＭＺ３.５ｋｇ">ＡＬＭＺ３.５ｋｇ</option>
+                                    <option value="ＡＬＭＺスプレー４２０ｍｌ">ＡＬＭＺスプレー４２０ｍｌ</option>
+                                    <option value="ＡＬＭＺ２０ｋｇ">ＡＬＭＺ２０ｋｇ</option>
+                                    <option disabled>──────────</option>
+                                    <option value="塗る亜鉛テクスチャー６㎏セット">塗る亜鉛テクスチャー６㎏セット</option>
+                                </select>
+                            </td>
+                            <td><input type="text" name="lotNumber[]" placeholder="ロット番号"></td>
+                            <td><input type="number" name="quantity[]" placeholder="数量"></td>
+                            <td><button type="button" class="remove-btn" onclick="removeProduct(this)">削除</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <button type="button" class="add-btn" id="addProductBtn" onclick="addProduct()">商品を追加</button>
+                <div class="note">※商品は最大7種類まで追加できます</div>
+            </div>
+            
+            <!-- 必要書類・送信先 -->
+            <div class="checkbox-section">
+                <div class="documents-list">
+                    <div class="section-title">【必要書類】</div>
+                    <div class="note">必要な書類にチェックを入れてください（チェックなしでも送信可能）</div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="doc1" name="documents[]" value="成分表・試験成績書">
+                        <label for="doc1">成分表・試験成績書</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="doc2" name="documents[]" value="ＳＤＳ">
+                        <label for="doc2">ＳＤＳ</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="doc3" name="documents[]" value="検査表(ロットが必要です)">
+                        <label for="doc3">検査表(ロットが必要です)</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="doc4" name="documents[]" value="カタログ">
+                        <label for="doc4">カタログ</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="doc5" name="documents[]" value="ﾎﾙﾑｱﾙﾃﾞﾋﾄﾞ(F☆☆☆☆)証明書">
+                        <label for="doc5">ﾎﾙﾑｱﾙﾃﾞﾋﾄﾞ(F☆☆☆☆)証明書</label>
+                    </div>
+                </div>
+                
+                <div class="destination-info">
+                    <div class="section-title">【送信先】</div>
+                    <div class="form-row">
+                        <span class="form-label">会社名：</span>
+                        <input type="text" class="form-input" id="destCompanyName" name="destCompanyName" placeholder="送信先会社名">
+                    </div>
+                    <div class="form-row">
+                        <span class="form-label">ご担当者名：</span>
+                        <input type="text" class="form-input" id="destContactPerson" name="destContactPerson" placeholder="送信先担当者名">
+                        <span style="margin-left: 5px;">様</span>
+                    </div>
+                    <div class="form-row">
+                        <span class="form-label">お電話番号：</span>
+                        <input type="text" class="form-input" id="destPhoneNumber" name="destPhoneNumber" placeholder="送信先電話番号">
+                    </div>
+                    <div class="form-row">
+                        <span class="form-label">メールアドレス：<span class="required">*</span></span>
+                        <input type="email" class="form-input" id="destEmailAddress" name="destEmailAddress" placeholder="送信先メールアドレス" required>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 備考欄 -->
+            <div class="section">
+                <h2>【備考】</h2>
+                <div class="form-group">
+                    <label for="remarks">備考・特記事項</label>
+                    <textarea id="remarks" name="remarks" placeholder="その他ご要望や特記事項がございましたらご記入ください" rows="4"></textarea>
+                </div>
+            </div>
+            
+            <div class="submit-section">
+                <button type="button" class="submit-btn" id="confirmBtn" onclick="showConfirmation()">入力内容を確認</button>
+                <button type="button" class="btn btn-secondary" onclick="clearForm()">内容をクリア</button>
+                <button type="button" class="print-btn" onclick="printForm()">印刷</button>
+            </div>
+        </form>
+
+        <div id="statusMessage" class="status-message"></div>
+    </div>
+
+    <!-- 確認画面モーダル -->
+    <div id="confirmationModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>出荷証明書作成依頼書 - 入力内容確認</h2>
+                <span class="close-modal" onclick="closeConfirmation()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="confirmationContent"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeConfirmation()">修正する</button>
+                <button type="button" class="submit-btn" onclick="submitForm()">この内容で送信</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Google Apps ScriptのWebアプリURL
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw6NcVtH5CWflOGGJYbIO5H07wwLHMVheRUVgGGyTd1QmGmpWmbDrkEnnneqkZDIFtB6g/exec';
+
+        // 敬称の切り替え
+        function toggleHonorificOther() {
+            const select = document.getElementById('honorific');
+            const otherInput = document.getElementById('honorificOther');
+            
+            if (select.value === 'other') {
+                otherInput.style.display = 'inline-block';
+                otherInput.required = true;
+                otherInput.focus();
+            } else {
+                otherInput.style.display = 'none';
+                otherInput.required = false;
+                otherInput.value = '';
+            }
+        }
+
+        // 業者追加（最大4者）
+        function addContractor() {
+            const list = document.getElementById('contractorsList');
+            const addBtn = document.getElementById('addContractorBtn');
+            
+            if (list.children.length >= 4) {
+                alert('業者は最大4者まで追加できます。');
+                return;
+            }
+            
+            const newRow = document.createElement('div');
+            newRow.className = 'contractor-row';
+            newRow.innerHTML = `
+                <input type="text" class="contractor-type" placeholder="業者種別">
+                <span>：</span>
+                <input type="text" class="form-input contractor-name" placeholder="業者名を入力してください">
+                <button type="button" class="remove-btn" onclick="removeContractor(this)">削除</button>
+            `;
+            list.appendChild(newRow);
+            
+            // 4者に達したらボタンを無効化
+            if (list.children.length >= 4) {
+                addBtn.disabled = true;
+                addBtn.textContent = '業者追加（上限4者）';
+            }
+        }
+
+        // 業者削除
+        function removeContractor(button) {
+            const list = document.getElementById('contractorsList');
+            const addBtn = document.getElementById('addContractorBtn');
+            
+            if (list.children.length > 1) {
+                button.parentNode.remove();
+                
+                // ボタンを再有効化
+                if (list.children.length < 4) {
+                    addBtn.disabled = false;
+                    addBtn.textContent = '業者を追加';
+                }
+            } else {
+                alert('最低1つの業者情報は必要です。');
+            }
+        }
+
+        // 商品追加（最大7行）
+        function addProduct() {
+            const tbody = document.querySelector('#productsTable tbody');
+            const addBtn = document.getElementById('addProductBtn');
+            
+            if (tbody.rows.length >= 7) {
+                alert('商品は最大7種類まで追加できます。');
+                return;
+            }
+            
+            const newRow = tbody.insertRow();
+            
+            // 商品マスターのオプションHTML（全商品）
+            const productOptions = `
+                <option value="">商品を選択してください</option>
+                <option value="ローバル１ｋｇ">ローバル１ｋｇ</option>
+                <option value="ローバル５ｋｇ">ローバル５ｋｇ</option>
+                <option value="ローバルスプレー３００ｍｌ">ローバルスプレー３００ｍｌ</option>
+                <option value="ローバル２５ｋｇ">ローバル２５ｋｇ</option>
+                <option value="厚膜ローバルスプレー４２０ｍｌ">厚膜ローバルスプレー４２０ｍｌ</option>
+                <option value="厚膜ローバル２５ｋｇ">厚膜ローバル２５ｋｇ</option>
+                <option disabled>──────────</option>
+                <option value="ローバルシンナー１Ｌ">ローバルシンナー１Ｌ</option>
+                <option value="ローバルシンナー３Ｌ">ローバルシンナー３Ｌ</option>
+                <option value="ローバルシンナー１４ｋｇ">ローバルシンナー１４ｋｇ</option>
+                <option disabled>──────────</option>
+                <option value="ローバルシルバー０.７ｋｇ">ローバルシルバー０.７ｋｇ</option>
+                <option value="ローバルシルバー３.５ｋｇ">ローバルシルバー３.５ｋｇ</option>
+                <option value="ローバルシルバースプレー４２０ｍｌ">ローバルシルバースプレー４２０ｍｌ</option>
+                <option value="ローバルシルバー２０ｋｇ">ローバルシルバー２０ｋｇ</option>
+                <option disabled>──────────</option>
+                <option value="エポローバル１ｋｇ">エポローバル１ｋｇ</option>
+                <option value="エポローバル５ｋｇ">エポローバル５ｋｇ</option>
+                <option value="エポローバル２５ｋｇ">エポローバル２５ｋｇ</option>
+                <option disabled>──────────</option>
+                <option value="エポローバルシンナー１Ｌ">エポローバルシンナー１Ｌ</option>
+                <option value="エポローバルシンナー３Ｌ">エポローバルシンナー３Ｌ</option>
+                <option value="エポローバルシンナー１４ｋｇ">エポローバルシンナー１４ｋｇ</option>
+                <option disabled>──────────</option>
+                <option value="ローバルアルファ０.７ｋｇ">ローバルアルファ０.７ｋｇ</option>
+                <option value="ローバルアルファ３.５ｋｇ">ローバルアルファ３.５ｋｇ</option>
+                <option value="ローバルアルファスプレー４２０ｍｌ">ローバルアルファスプレー４２０ｍｌ</option>
+                <option value="ローバルアルファ２０ｋｇ">ローバルアルファ２０ｋｇ</option>
+                <option disabled>──────────</option>
+                <option value="メッキカバースプレー４２０ｍｌ">メッキカバースプレー４２０ｍｌ</option>
+                <option value="ニュージンクカバースプレー４２０ｍｌ">ニュージンクカバースプレー４２０ｍｌ</option>
+                <option value="マットカバースプレー４２０ｍｌ">マットカバースプレー４２０ｍｌ</option>
+                <option value="マットカバー１８ｋｇ">マットカバー１８ｋｇ</option>
+                <option value="クロムもドキッスプレー３３０ｍｌ">クロムもドキッスプレー３３０ｍｌ</option>
+                <option disabled>──────────</option>
+                <option value="水性ローバル０.９ｋｇセット">水性ローバル０.９ｋｇセット</option>
+                <option value="水性ローバル４.５ｋｇセット">水性ローバル４.５ｋｇセット</option>
+                <option value="水性ローバル１８ｋｇセット">水性ローバル１８ｋｇセット</option>
+                <option disabled>──────────</option>
+                <option value="低臭クリーナー３Ｌ">低臭クリーナー３Ｌ</option>
+                <option disabled>──────────</option>
+                <option value="ローバル エコタイプ１ｋｇ">ローバル エコタイプ１ｋｇ</option>
+                <option value="ローバル エコタイプ５ｋｇ">ローバル エコタイプ５ｋｇ</option>
+                <option value="ローバルスプレー エコタイプ４２０ｍｌ">ローバルスプレー エコタイプ４２０ｍｌ</option>
+                <option value="ローバル エコタイプ２５ｋｇ">ローバル エコタイプ２５ｋｇ</option>
+                <option value="ローバル エコタイプ９０ｍｌ">ローバル エコタイプ９０ｍｌ</option>
+                <option disabled>──────────</option>
+                <option value="エコシリーズシンナー１Ｌ">エコシリーズシンナー１Ｌ</option>
+                <option disabled>──────────</option>
+                <option value="ローバルシルバー エコタイプ０.７ｋｇ">ローバルシルバー エコタイプ０.７ｋｇ</option>
+                <option value="ローバルシルバー エコタイプ３.５ｋｇ">ローバルシルバー エコタイプ３.５ｋｇ</option>
+                <option value="ローバルシルバースプレー エコタイプ４２０ｍｌ">ローバルシルバースプレー エコタイプ４２０ｍｌ</option>
+                <option value="ローバルシルバー エコタイプ２０ｋｇ">ローバルシルバー エコタイプ２０ｋｇ</option>
+                <option value="ローバルシルバー エコタイプ９０ｍｌ">ローバルシルバー エコタイプ９０ｍｌ</option>
+                <option disabled>──────────</option>
+                <option value="ＡＬＭＺ０.７ｋｇ">ＡＬＭＺ０.７ｋｇ</option>
+                <option value="ＡＬＭＺ３.５ｋｇ">ＡＬＭＺ３.５ｋｇ</option>
+                <option value="ＡＬＭＺスプレー４２０ｍｌ">ＡＬＭＺスプレー４２０ｍｌ</option>
+                <option value="ＡＬＭＺ２０ｋｇ">ＡＬＭＺ２０ｋｇ</option>
+                <option disabled>──────────</option>
+                <option value="塗る亜鉛テクスチャー６㎏セット">塗る亜鉛テクスチャー６㎏セット</option>
+            `;
+            
+            newRow.innerHTML = `
+                <td><input type="date" name="shipmentDate[]"></td>
+                <td><select name="productName[]" onchange="handleProductSelect(this)">${productOptions}</select></td>
+                <td><input type="text" name="lotNumber[]" placeholder="ロット番号"></td>
+                <td><input type="number" name="quantity[]" placeholder="数量"></td>
+                <td><button type="button" class="remove-btn" onclick="removeProduct(this)">削除</button></td>
+            `;
+            
+            // 7行に達したらボタンを無効化
+            if (tbody.rows.length >= 7) {
+                addBtn.disabled = true;
+                addBtn.textContent = '商品追加（上限7種類）';
+            }
+        }
+
+        // 商品削除
+        function removeProduct(button) {
+            const tbody = document.querySelector('#productsTable tbody');
+            const addBtn = document.getElementById('addProductBtn');
+            
+            if (tbody.rows.length > 1) {
+                button.closest('tr').remove();
+                
+                // ボタンを再有効化
+                if (tbody.rows.length < 7) {
+                    addBtn.disabled = false;
+                    addBtn.textContent = '商品を追加';
+                }
+            } else {
+                alert('最低1つの商品情報は必要です。');
+            }
+        }
+
+        // 商品選択時の処理
+        function handleProductSelect(select) {
+            console.log('選択された商品:', select.value);
+        }
+
+        // 管理番号は送信後にサーバーから取得するため、初期化のみ
+        function initializeManagementNumber() {
+            document.getElementById('managementNumber').value = '';
+        }
+
+        // ステータスメッセージを表示
+        function showMessage(message, type) {
+            const messageElement = document.getElementById('statusMessage');
+            messageElement.textContent = message;
+            messageElement.className = `status-message ${type} show`;
+
+            setTimeout(() => {
+                messageElement.classList.remove('show');
+            }, 5000);
+        }
+
+        // フォーム送信処理
+        document.getElementById('certificateForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            // 必須項目のチェック
+            const requiredFields = [
+                { id: 'companyName', name: '会社名' },
+                { id: 'contactPerson', name: 'ご担当者名' },
+                { id: 'phoneNumber', name: 'お電話番号' },
+                { id: 'emailAddress', name: 'メールアドレス' },
+                { id: 'addressee', name: '宛名' },
+                { id: 'constructionName', name: '工事名' },
+                { id: 'destEmailAddress', name: '送信先メールアドレス' }
+            ];
+            
+            for (let field of requiredFields) {
+                const element = document.getElementById(field.id);
+                if (!element.value.trim()) {
+                    alert(field.name + 'は必須項目です。');
+                    element.focus();
+                    return;
+                }
+            }
+            
+            // 敬称の特別チェック
+            const honorific = document.getElementById('honorific').value;
+            if (honorific === 'other') {
+                const otherValue = document.getElementById('honorificOther').value.trim();
+                if (!otherValue) {
+                    alert('敬称の「その他」が選択されている場合は、具体的な敬称を入力してください。');
+                    document.getElementById('honorificOther').focus();
+                    return;
+                }
+            }
+            
+            // 商品情報のチェック
+            const productSelects = document.querySelectorAll('select[name="productName[]"]');
+            let hasProduct = false;
+            for (let select of productSelects) {
+                if (select.value.trim()) {
+                    hasProduct = true;
+                    break;
+                }
+            }
+            
+            if (!hasProduct) {
+                alert('少なくとも1つの商品を選択してください。');
+                return;
+            }
+
+            // フォームデータを収集（新しい形式で）
+            const formData = collectFormDataNew();
+            
+            try {
+                const submitBtn = document.getElementById('submitBtn');
+                submitBtn.disabled = true;
+                submitBtn.textContent = '送信中...';
+                
+                // Google Sheetsに送信
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain',
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                // レスポンスを確認
+                const result = await response.text();
+                console.log('サーバーレスポンス:', result);
+                
+                if (response.ok) {
+                    showMessage('✅ 出荷証明書作成依頼が正常に送信されました！管理番号は送信後に生成されます。', 'success');
+                } else {
+                    throw new Error('送信に失敗しました');
+                }
+                
+                // フォームをリセット
+                this.reset();
+                document.getElementById('managementNumber').value = '';
+                
+                // 敬称を初期状態に戻す
+                document.getElementById('honorific').value = '様';
+                toggleHonorificOther();
+                
+            } catch (error) {
+                console.error('送信エラー:', error);
+                showMessage('❌ 送信エラーが発生しました。しばらく時間をおいて再試行してください。', 'error');
+            } finally {
+                const submitBtn = document.getElementById('submitBtn');
+                submitBtn.disabled = false;
+                submitBtn.textContent = '送信';
+            }
+        });
+
+        // フォームデータを収集する関数
+        function collectFormData() {
+            const data = {
+                timestamp: new Date().toLocaleString('ja-JP'),
+                receiptNumber: document.getElementById('receiptNumber').value,
+                companyName: document.getElementById('companyName').value,
+                contactPerson: document.getElementById('contactPerson').value,
+                phoneNumber: document.getElementById('phoneNumber').value,
+                emailAddress: document.getElementById('emailAddress').value,
+                addressee: document.getElementById('addressee').value,
+                honorific: getHonorificValue(),
+                constructionName: document.getElementById('constructionName').value,
+                constructionAddress: document.getElementById('constructionAddress').value,
+                creationDate: document.getElementById('creationDate').value,
+                destCompanyName: document.getElementById('destCompanyName').value,
+                destContactPerson: document.getElementById('destContactPerson').value,
+                destPhoneNumber: document.getElementById('destPhoneNumber').value,
+                destEmailAddress: document.getElementById('destEmailAddress').value
+            };
+
+            // 敬称の値を取得
+            function getHonorificValue() {
+                const select = document.getElementById('honorific');
+                if (select.value === 'other') {
+                    return document.getElementById('honorificOther').value;
+                }
+                return select.value;
+            }
+
+            // 業者情報を収集
+            data.contractors = [];
+            const contractorRows = document.querySelectorAll('#contractorsList .contractor-row');
+            contractorRows.forEach(row => {
+                const type = row.querySelector('.contractor-type').value;
+                const name = row.querySelector('.contractor-name').value;
+                if (type || name) {
+                    data.contractors.push({ type, name });
+                }
+            });
+
+            // 商品情報を収集
+            data.products = [];
+            const productRows = document.querySelectorAll('#productsTable tbody tr');
+            productRows.forEach(row => {
+                const shipmentDate = row.querySelector('input[name="shipmentDate[]"]').value;
+                const productName = row.querySelector('select[name="productName[]"]').value;
+                const lotNumber = row.querySelector('input[name="lotNumber[]"]').value;
+                const quantity = row.querySelector('input[name="quantity[]"]').value;
+                
+                if (productName) {
+                    data.products.push({
+                        shipmentDate,
+                        productName,
+                        lotNumber,
+                        quantity
+                    });
+                }
+            });
+
+            // 必要書類を収集
+            data.documents = [];
+            const checkedDocuments = document.querySelectorAll('input[name="documents[]"]:checked');
+            checkedDocuments.forEach(checkbox => {
+                data.documents.push(checkbox.value);
+            });
+
+            return data;
+        }
+        
+        // 新しいフォームデータ収集関数（データベース形式に合わせて）
+        function collectFormDataNew() {
+            const data = {
+                timestamp: new Date().toLocaleString('ja-JP'),
+                companyName: document.getElementById('companyName').value,
+                contactPerson: document.getElementById('contactPerson').value,
+                phoneNumber: document.getElementById('phoneNumber').value,
+                emailAddress: document.getElementById('emailAddress').value,
+                addressee: document.getElementById('addressee').value,
+                honorific: getHonorificValue(),
+                constructionName: document.getElementById('constructionName').value,
+                constructionAddress: document.getElementById('constructionAddress').value,
+                creationDate: document.getElementById('creationDate').value,
+                destCompanyName: document.getElementById('destCompanyName').value,
+                destContactPerson: document.getElementById('destContactPerson').value,
+                destPhoneNumber: document.getElementById('destPhoneNumber').value,
+                destEmailAddress: document.getElementById('destEmailAddress').value,
+                remarks: document.getElementById('remarks').value,
+                contractors: [],
+                products: [],
+                documents: []
+            };
+            
+            // 敬称の値を取得
+            function getHonorificValue() {
+                const select = document.getElementById('honorific');
+                if (select.value === 'other') {
+                    return document.getElementById('honorificOther').value;
+                }
+                return select.value;
+            }
+            
+            // 業者情報を収集
+            const contractorRows = document.querySelectorAll('#contractorsList .contractor-row');
+            contractorRows.forEach(row => {
+                const type = row.querySelector('.contractor-type').value;
+                const name = row.querySelector('.contractor-name').value;
+                if (type || name) {
+                    data.contractors.push({ type, name });
+                }
+            });
+            
+            // 商品情報を収集
+            const productRows = document.querySelectorAll('#productsTable tbody tr');
+            productRows.forEach(row => {
+                const shipmentDate = row.querySelector('input[name="shipmentDate[]"]').value;
+                const productName = row.querySelector('select[name="productName[]"]').value;
+                const lotNumber = row.querySelector('input[name="lotNumber[]"]').value;
+                const quantity = row.querySelector('input[name="quantity[]"]').value;
+                
+                if (productName) {
+                    data.products.push({
+                        shipmentDate,
+                        productName,
+                        lotNumber,
+                        quantity
+                    });
+                }
+            });
+            
+            // 必要書類を収集
+            const checkedDocuments = document.querySelectorAll('input[name="documents[]"]:checked');
+            checkedDocuments.forEach(checkbox => {
+                data.documents.push(checkbox.value);
+            });
+            
+            return data;
+        }
+        
+        // 入力確認画面を表示
+        function showConfirmation() {
+            // 必須項目のチェック
+            const requiredFields = [
+                { id: 'companyName', name: '会社名' },
+                { id: 'contactPerson', name: 'ご担当者名' },
+                { id: 'phoneNumber', name: 'お電話番号' },
+                { id: 'emailAddress', name: 'メールアドレス' },
+                { id: 'addressee', name: '宛名' },
+                { id: 'constructionName', name: '工事名' },
+                { id: 'destEmailAddress', name: '送信先メールアドレス' }
+            ];
+            
+            for (let field of requiredFields) {
+                const element = document.getElementById(field.id);
+                if (!element.value.trim()) {
+                    alert(field.name + 'は必須項目です。');
+                    element.focus();
+                    return;
+                }
+            }
+            
+            // 商品チェック
+            const productSelects = document.querySelectorAll('select[name="productName[]"]');
+            let hasProduct = false;
+            for (let select of productSelects) {
+                if (select.value.trim()) {
+                    hasProduct = true;
+                    break;
+                }
+            }
+            
+            if (!hasProduct) {
+                alert('少なくとも1つの商品を選択してください。');
+                return;
+            }
+            
+            // 確認画面の内容を生成
+            generateConfirmationContent();
+            
+            // モーダルを表示
+            document.getElementById('confirmationModal').style.display = 'flex';
+        }
+        
+        // 確認画面の内容を生成
+        function generateConfirmationContent() {
+            const data = collectFormDataNew();
+            let html = '';
+            
+            // 発信元情報
+            html += '<div class="confirm-section">';
+            html += '<h3>【発信元】</h3>';
+            html += `<div class="confirm-row"><span class="confirm-label">会社名：</span><span class="confirm-value">${data.companyName}</span></div>`;
+            html += `<div class="confirm-row"><span class="confirm-label">担当者名：</span><span class="confirm-value">${data.contactPerson}</span></div>`;
+            html += `<div class="confirm-row"><span class="confirm-label">電話番号：</span><span class="confirm-value">${data.phoneNumber}</span></div>`;
+            html += `<div class="confirm-row"><span class="confirm-label">メールアドレス：</span><span class="confirm-value">${data.emailAddress}</span></div>`;
+            html += '</div>';
+            
+            // 基本情報
+            html += '<div class="confirm-section">';
+            html += '<h3>【基本情報】</h3>';
+            html += `<div class="confirm-row"><span class="confirm-label">宛名：</span><span class="confirm-value">${data.addressee} ${data.honorific}</span></div>`;
+            html += `<div class="confirm-row"><span class="confirm-label">工事名：</span><span class="confirm-value">${data.constructionName}</span></div>`;
+            if (data.constructionAddress) {
+                html += `<div class="confirm-row"><span class="confirm-label">工事住所：</span><span class="confirm-value">${data.constructionAddress}</span></div>`;
+            }
+            if (data.creationDate) {
+                html += `<div class="confirm-row"><span class="confirm-label">作成日：</span><span class="confirm-value">${data.creationDate}</span></div>`;
+            }
+            html += '</div>';
+            
+            // 業者情報
+            if (data.contractors.length > 0) {
+                html += '<div class="confirm-section">';
+                html += '<h3>【業者情報】</h3>';
+                data.contractors.forEach(contractor => {
+                    if (contractor.type || contractor.name) {
+                        html += `<div class="confirm-row"><span class="confirm-label">${contractor.type}：</span><span class="confirm-value">${contractor.name}</span></div>`;
+                    }
+                });
+                html += '</div>';
+            }
+            
+            // 商品情報
+            if (data.products.length > 0) {
+                html += '<div class="confirm-section">';
+                html += '<h3>【商品情報】</h3>';
+                html += '<table class="confirm-table">';
+                html += '<thead><tr><th>出荷年月日</th><th>商品名</th><th>数量</th><th>ロット番号</th></tr></thead>';
+                html += '<tbody>';
+                data.products.forEach(product => {
+                    html += '<tr>';
+                    html += `<td>${product.shipmentDate || ''}</td>`;
+                    html += `<td>${product.productName}</td>`;
+                    html += `<td>${product.quantity}</td>`;
+                    html += `<td>${product.lotNumber || ''}</td>`;
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+                html += '</div>';
+            }
+            
+            // 必要書類
+            if (data.documents.length > 0) {
+                html += '<div class="confirm-section">';
+                html += '<h3>【必要書類】</h3>';
+                data.documents.forEach(doc => {
+                    html += `<div class="confirm-row"><span class="confirm-value">✓ ${doc}</span></div>`;
+                });
+                html += '</div>';
+            }
+            
+            // 送信先
+            html += '<div class="confirm-section">';
+            html += '<h3>【送信先】</h3>';
+            if (data.destCompanyName) {
+                html += `<div class="confirm-row"><span class="confirm-label">会社名：</span><span class="confirm-value">${data.destCompanyName}</span></div>`;
+            }
+            if (data.destContactPerson) {
+                html += `<div class="confirm-row"><span class="confirm-label">担当者名：</span><span class="confirm-value">${data.destContactPerson}</span></div>`;
+            }
+            if (data.destPhoneNumber) {
+                html += `<div class="confirm-row"><span class="confirm-label">電話番号：</span><span class="confirm-value">${data.destPhoneNumber}</span></div>`;
+            }
+            html += `<div class="confirm-row"><span class="confirm-label">メールアドレス：</span><span class="confirm-value">${data.destEmailAddress}</span></div>`;
+            html += '</div>';
+            
+            // 備考
+            if (data.remarks) {
+                html += '<div class="confirm-section">';
+                html += '<h3>【備考】</h3>';
+                html += `<div class="confirm-value">${data.remarks.replace(/\n/g, '<br>')}</div>`;
+                html += '</div>';
+            }
+            
+            document.getElementById('confirmationContent').innerHTML = html;
+        }
+        
+        // 確認画面を閉じる
+        function closeConfirmation() {
+            document.getElementById('confirmationModal').style.display = 'none';
+        }
+        
+        // フォームクリア
+        function clearForm() {
+            if (confirm('入力内容をすべてクリアしますか？')) {
+                document.getElementById('certificateForm').reset();
+                initializeManagementNumber();
+                
+                // 敬称を初期状態に戻す
+                document.getElementById('honorific').value = '様';
+                toggleHonorificOther();
+            }
+        }
+        
+        // 実際の送信処理
+        async function submitForm() {
+            try {
+                const formData = collectFormDataNew();
+                const submitBtn = document.querySelector('.modal-footer .submit-btn');
+                
+                submitBtn.disabled = true;
+                submitBtn.textContent = '送信中...';
+                
+                // Google Sheetsに送信
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain',
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                // モーダルを閉じる
+                closeConfirmation();
+                
+                // 成功メッセージ
+                showMessage('✅ 出荷証明書作成依頼が正常に送信されました！管理番号は送信後に生成されます。', 'success');
+                
+                // フォームはクリアしない（連続申請対応）
+                
+            } catch (error) {
+                console.error('送信エラー:', error);
+                showMessage('❌ 送信エラーが発生しました。しばらく時間をおいて再試行してください。', 'error');
+            } finally {
+                const submitBtn = document.querySelector('.modal-footer .submit-btn');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'この内容で送信';
+            }
+        }
+        
+        // 印刷処理
+        function printForm() {
+            window.print();
+        }
+        
+        // ページ読み込み時の初期化
+        window.onload = function() {
+            initializeManagementNumber();
+        };
+
+        // 入力時のリアルタイムバリデーション
+        document.querySelectorAll('input, textarea, select').forEach(element => {
+            element.addEventListener('input', function () {
+                if (this.checkValidity()) {
+                    this.style.borderColor = '#4CAF50';
+                } else if (this.value) {
+                    this.style.borderColor = '#dc3545';
+                } else {
+                    this.style.borderColor = '#ddd';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
